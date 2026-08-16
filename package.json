@@ -1,6 +1,6 @@
 {
   "name": "epwr-bot",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "EPWR — Epic Powers, Wars & Realms | Telegram strategy game bot",
   "type": "module",
@@ -9,11 +9,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "typescript": "^5.9.2",
-    "tsx": "^4.20.3"
+    "@supabase/supabase-js": "^2.57.0"
   },
   "devDependencies": {
     "@vercel/node": "^5.4.0",
+    "typescript": "^5.9.2",
     "vercel": "^48.0.0"
   },
   "engines": {
