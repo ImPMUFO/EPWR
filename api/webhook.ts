@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createNewPlayer } from "../src/game/player.js";
-import { mainMenu, sendMessage, telegramApi } from "../src/bot/telegram.js";
+import { supabase } from "../src/database/supabase.js";
+import { sendMessage, mainMenu, telegramApi } from "../src/bot/telegram.js";
 
 type TelegramUser = {
   id: number;
@@ -33,27 +33,6 @@ type TelegramUpdate = {
   callback_query?: TelegramCallbackQuery;
 };
 
-// Temporary in-memory store for the first prototype.
-// We will replace this with Supabase before adding real progression.
-const players = new Map<number, ReturnType<typeof createNewPlayer>>();
-
-function welcomeText(firstName: string) {
-  return [
-    "⚔️ <b>EPWR | نبرد حماسی</b> 💎",
-    "",
-    `سلام <b>${escapeHtml(firstName)}</b>!`,
-    "به سرزمین قدرت‌ها، جنگ‌ها و قلمروها خوش آمدی.",
-    "",
-    "👑 در EPWR فرمانده یک قلمرو هستی.",
-    "⚔️ ارتش بساز،",
-    "💰 منابع جمع کن،",
-    "🏰 قلمروت را توسعه بده،",
-    "🗺️ و برای تبدیل شدن به یک قدرت بزرگ بجنگ.",
-    "",
-    "<i>ماجراجویی تو از همین‌جا شروع می‌شود.</i>",
-  ].join("\n");
-}
-
 function escapeHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -63,25 +42,72 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#039;");
 }
 
+async function getOrCreatePlayer(user: TelegramUser) {
+  const { data: existingPlayer, error: findError } = await supabase
+    .from("players")
+    .select("*")
+    .eq("telegram_id", user.id)
+    .maybeSingle();
+
+  if (findError) {
+    throw findError;
+  }
+
+  if (existingPlayer) {
+    return existingPlayer;
+  }
+
+  const { data: newPlayer, error: insertError } = await supabase
+    .from("players")
+    .insert({
+      telegram_id: user.id,
+      telegram_username: user.username ?? null,
+      first_name: user.first_name ?? "فرمانده",
+      commander_name: user.first_name ?? "فرمانده",
+      realm_name: "قلمرو نوپا",
+    })
+    .select("*")
+    .single();
+
+  if (insertError) {
+    throw insertError;
+  }
+
+  return newPlayer;
+}
+
+function welcomeText(player: any) {
+  return [
+    "⚔️ <b>EPWR | نبرد حماسی</b> 💎",
+    "",
+    `سلام <b>${escapeHtml(player.first_name)}</b>!`,
+    "",
+    "به سرزمین قدرت‌ها، جنگ‌ها و قلمروها خوش آمدی.",
+    "",
+    `👑 فرمانده: <b>${escapeHtml(player.commander_name)}</b>`,
+    `🏰 قلمرو: <b>${escapeHtml(player.realm_name)}</b>`,
+    `⭐ سطح: <b>${player.level}</b>`,
+    "",
+    "از منوی زیر ماجراجویی خودت را شروع کن.",
+  ].join("\n");
+}
+
 async function handleUpdate(update: TelegramUpdate) {
   if (update.message?.text) {
     const message = update.message;
-    const from = message.from;
-    if (!from) return;
+    const user = message.from;
+
+    if (!user) return;
 
     if (message.text.startsWith("/start")) {
-      let player = players.get(from.id);
+      const player = await getOrCreatePlayer(user);
 
-      if (!player) {
-        player = createNewPlayer({
-          telegramId: from.id,
-          username: from.username,
-          firstName: from.first_name ?? "فرمانده",
-        });
-        players.set(from.id, player);
-      }
+      await sendMessage(
+        message.chat.id,
+        welcomeText(player),
+        mainMenu,
+      );
 
-      await sendMessage(message.chat.id, welcomeText(player.firstName), mainMenu);
       return;
     }
 
@@ -90,42 +116,45 @@ async function handleUpdate(update: TelegramUpdate) {
       "⚔️ برای شروع بازی از دستور <b>/start</b> استفاده کن.",
       mainMenu,
     );
+
     return;
   }
 
   const callback = update.callback_query;
+
   if (!callback?.message) return;
 
-  const chatId = callback.message.chat.id;
-  const userId = callback.from.id;
-  const player = players.get(userId);
+  const player = await getOrCreatePlayer(callback.from);
 
   await telegramApi("answerCallbackQuery", {
     callback_query_id: callback.id,
   });
 
-  if (!player) {
-    await sendMessage(chatId, "ابتدا با /start وارد بازی شو.");
-    return;
-  }
-
   const responses: Record<string, string> = {
     realm:
-      `🏰 <b>قلمرو من</b>\n\n👑 فرمانده: ${escapeHtml(player.commanderName)}\n🏰 قلمرو: ${escapeHtml(player.realmName)}\n⭐ سطح: ${player.level}`,
+      `🏰 <b>قلمرو من</b>\n\n` +
+      `👑 فرمانده: ${escapeHtml(player.commander_name)}\n` +
+      `🏰 قلمرو: ${escapeHtml(player.realm_name)}\n` +
+      `⭐ سطح: ${player.level}`,
+
     army:
-      "⚔️ <b>ارتش من</b>\n\nهنوز ارتشی تشکیل نداده‌ای.\nبه‌زودی نخستین نیروهایت را استخدام می‌کنیم.",
+      "⚔️ <b>ارتش من</b>\n\nهنوز ارتشی تشکیل نداده‌ای.",
+
     resources:
       `💰 <b>منابع</b>\n\n🪙 طلا: ${player.gold}\n💎 الماس: ${player.gems}`,
+
     world:
-      "🗺️ <b>جهان EPWR</b>\n\nنقشه جهان در مرحله بعدی ساخته می‌شود.",
+      "🗺️ <b>جهان EPWR</b>\n\nنقشه جهان به‌زودی ساخته می‌شود.",
+
     ranking:
-      "🏆 <b>رتبه‌بندی</b>\n\nهنوز رقابت آغاز نشده است.",
+      "🏆 <b>رتبه‌بندی</b>\n\nرقابت فرماندهان به‌زودی آغاز می‌شود.",
+
     settings:
       "⚙️ <b>تنظیمات</b>\n\nتنظیمات فرمانده در نسخه بعدی اضافه می‌شود.",
   };
 
   await sendMessage(
-    chatId,
+    callback.message.chat.id,
     responses[callback.data ?? ""] ?? "دستور ناشناخته است.",
     mainMenu,
   );
@@ -145,16 +174,31 @@ export default async function handler(
   }
 
   const secret = req.headers["x-telegram-bot-api-secret-token"];
-  if (process.env.TELEGRAM_WEBHOOK_SECRET && secret !== process.env.TELEGRAM_WEBHOOK_SECRET) {
-    res.status(401).json({ ok: false, error: "Unauthorized" });
+
+  if (
+    process.env.TELEGRAM_WEBHOOK_SECRET &&
+    secret !== process.env.TELEGRAM_WEBHOOK_SECRET
+  ) {
+    res.status(401).json({
+      ok: false,
+      error: "Unauthorized",
+    });
+
     return;
   }
 
   try {
     await handleUpdate(req.body as TelegramUpdate);
-    res.status(200).json({ ok: true });
+
+    res.status(200).json({
+      ok: true,
+    });
   } catch (error) {
     console.error("EPWR webhook error:", error);
-    res.status(500).json({ ok: false });
+
+    res.status(500).json({
+      ok: false,
+      error: "Internal server error",
+    });
   }
 }
