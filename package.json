@@ -1,4 +1,15 @@
 {
-  "name": "simple-bot",
-  "dependencies": { "telegraf": "^4.16.3" }
+  "name": "epwr",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "telegraf": "^4.16.3",
+    "@supabase/supabase-js": "^2.39.0",
+    "dotenv": "^16.3.1",
+    "zod": "^3.22.4"
+  },
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  }
 }
