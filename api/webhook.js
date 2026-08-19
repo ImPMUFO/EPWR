@@ -7,10 +7,9 @@ module.exports = async (req, res) => {
       await bot.handleUpdate(req.body);
       return res.status(200).send('OK');
     }
-
     res.status(200).json({
       ok: true,
-      service: 'EPWR Telegram Bot',
+      service: 'EPWR',
       message: 'EPWR is alive ⚔️'
     });
   } catch (err) {
