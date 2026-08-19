@@ -1,7 +1,7 @@
 const { getOrCreatePlayer } = require('../../game/player');
 const { getAllCharacters, getAllItems, getCharacterById, getItemById, purchaseCharacter, purchaseItem, usePotion, getPlayerItems } = require('../../game/shop');
 const { getPlayerHeroes, getHeroById } = require('../../game/heroes');
-const { rarityEmoji, rarityName, formatGold, reply } = require('../../core/helpers');
+const { rarityEmoji, formatGold, reply } = require('../../core/helpers');
 
 module.exports = function registerShop(bot) {
 
@@ -15,7 +15,6 @@ module.exports = function registerShop(bot) {
     const result = await purchaseCharacter(ctx.from.id, player, template);
     if (!result.success) return ctx.answerCbQuery(result.message, { show_alert: true });
     await ctx.answerCbQuery(`✅ ${template.name} خریداری شد!`, { show_alert: true });
-    await showShop(ctx);
   });
 
   bot.action(/^buy_item:(\d+)$/, async (ctx) => {
@@ -25,7 +24,6 @@ module.exports = function registerShop(bot) {
     const result = await purchaseItem(ctx.from.id, player, item);
     if (!result.success) return ctx.answerCbQuery(result.message, { show_alert: true });
     await ctx.answerCbQuery(`✅ ${item.name} خریداری شد!`, { show_alert: true });
-    await showShop(ctx);
   });
 
   bot.command('myheroes', async (ctx) => { try { await showMyHeroes(ctx); } catch(e) { await reply(ctx, '⚠️ ' + e.message); } });
@@ -39,18 +37,15 @@ module.exports = function registerShop(bot) {
     const maxHp = t.base_health * hero.level;
     const hpPercent = Math.floor((hero.current_health / maxHp) * 100);
 
-    let msg = `${rarityEmoji(t.rarity)} *${t.name}* Lv.${hero.level}\n\n`;
-    msg += `❤ سلامتی: ${hero.current_health}/${maxHp} (${hpPercent}%)\n`;
-    msg += `🗡 حمله: ${t.base_attack + (hero.level-1)*2}\n`;
-    msg += `🛡 دفاع: ${t.base_defense + (hero.level-1)*2}\n`;
-    msg += `✨ XP: ${hero.xp || 0}\n`;
+    let msg = `${rarityEmoji(t.rarity)} *${t.name}* Lv.${hero.level}\n`;
+    msg += `❤ ${hpPercent}% | 🗡 ${t.base_attack} | 🛡 ${t.base_defense}\n`;
+    msg += `✨ XP: ${hero.xp || 0}`;
 
     const buttons = [];
     if (hero.current_health < maxHp) {
-      buttons.push([{ text: '🧪 استفاده از معجون', callback_data: `use_potion:${hero.id}` }]);
+      buttons.push([{ text: '🧪 معجون', callback_data: `use_potion:${hero.id}` }]);
     }
-    buttons.push([{ text: '👥 لیست قهرمانان', callback_data: 'myheroes' }]);
-    buttons.push([{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]);
+    buttons.push([{ text: '👥 قهرمانان', callback_data: 'myheroes' }, { text: '🔙 بازگشت', callback_data: 'mainmenu' }]);
 
     await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   });
@@ -59,8 +54,7 @@ module.exports = function registerShop(bot) {
     await ctx.answerCbQuery();
     const result = await usePotion(ctx.from.id, ctx.match[1]);
     if (result.success) {
-      await ctx.answerCbQuery(`✅ ${result.heroName} درمان شد! ❤${result.newHp}/${result.maxHp}`, { show_alert: true });
-      await showMyHeroes(ctx);
+      await ctx.answerCbQuery(`✅ درمان شد! ❤${result.newHp}/${result.maxHp}`, { show_alert: true });
     } else {
       await ctx.answerCbQuery(result.message, { show_alert: true });
     }
@@ -70,20 +64,15 @@ module.exports = function registerShop(bot) {
     await ctx.answerCbQuery();
     const items = await getPlayerItems(ctx.from.id);
     if (items.length === 0) {
-      return reply(ctx, '📦 آیتمی نداری! از فروشگاه بخر.', {
-        reply_markup: { inline_keyboard: [[{ text: '🛒 فروشگاه', callback_data: 'shop' }], [{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]] }
-      });
+      return ctx.answerCbQuery('📦 آیتمی نداری!', { show_alert: true });
     }
-
-    let msg = `📦 *آیتم‌های من*\n\n`;
+    let msg = `📦 *آیتم‌ها*\n\n`;
     items.forEach(i => {
-      const status = i.is_active ? '⚡ فعال' : '📦 در کیف';
-      msg += `• ${i.item.name} (${i.item.effect_value}) - ${status}\n`;
+      msg += `• ${i.item.name} ${i.is_active ? '⚡' : ''}\n`;
     });
-
     await ctx.editMessageText(msg, {
       parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard: [[{ text: '🛒 فروشگاه', callback_data: 'shop' }], [{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]] }
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]] }
     });
   });
 
@@ -92,27 +81,38 @@ module.exports = function registerShop(bot) {
     const characters = await getAllCharacters();
     const items = await getAllItems();
 
-    let msg = `🛒 *فروشگاه EPWR*\n\n`;
-    msg += `💰 موجودی: ${formatGold(player.gold)} Gold | 💎 ${player.gems} Gems\n\n`;
-
+    let msg = `🛒 *فروشگاه*\n💰 ${formatGold(player.gold)} | 💎 ${player.gems}\n\n`;
     const buttons = [];
 
+    // قهرمان‌ها - دوتا در یک ردیف
     if (characters.length > 0) {
-      msg += `━━━ 🎭 قهرمانان ━━━\n\n`;
-      characters.forEach(c => {
-        const price = c.price_gold > 0 ? `💰${formatGold(c.price_gold)}` : `💎${c.price_gems}`;
-        msg += `${rarityEmoji(c.rarity)} *${c.name}* | ❤${c.base_health} 🗡${c.base_attack} 🛡${c.base_defense} | ${price}\n`;
-        buttons.push([{ text: `🎭 ${c.name} (${price})`, callback_data: `buy_char:${c.id}` }]);
-      });
+      msg += `🎭 *قهرمانان*\n`;
+      for (let i = 0; i < characters.length; i += 2) {
+        const row = [];
+        const c1 = characters[i];
+        const p1 = c1.price_gold > 0 ? `💰${c1.price_gold}` : `💎${c1.price_gems}`;
+        row.push({ text: `${rarityEmoji(c1.rarity)} ${c1.name} ${p1}`, callback_data: `buy_char:${c1.id}` });
+        if (i + 1 < characters.length) {
+          const c2 = characters[i + 1];
+          const p2 = c2.price_gold > 0 ? `💰${c2.price_gold}` : `💎${c2.price_gems}`;
+          row.push({ text: `${rarityEmoji(c2.rarity)} ${c2.name} ${p2}`, callback_data: `buy_char:${c2.id}` });
+        }
+        buttons.push(row);
+      }
       msg += `\n`;
     }
 
+    // آیتم‌ها - دوتا در یک ردیف
     if (items.length > 0) {
-      msg += `━━━ 🎁 آیتم‌ها ━━━\n\n`;
-      items.forEach(i => {
-        msg += `📦 *${i.name}* | ${i.description} | 💰${formatGold(i.price_gold)}\n`;
-        buttons.push([{ text: `📦 ${i.name} (💰${formatGold(i.price_gold)})`, callback_data: `buy_item:${i.id}` }]);
-      });
+      msg += `🎁 *آیتم‌ها*\n`;
+      for (let i = 0; i < items.length; i += 2) {
+        const row = [];
+        row.push({ text: `📦 ${items[i].name} 💰${items[i].price_gold}`, callback_data: `buy_item:${items[i].id}` });
+        if (i + 1 < items.length) {
+          row.push({ text: `📦 ${items[i+1].name} 💰${items[i+1].price_gold}`, callback_data: `buy_item:${items[i+1].id}` });
+        }
+        buttons.push(row);
+      }
     }
 
     buttons.push([
@@ -127,20 +127,25 @@ module.exports = function registerShop(bot) {
   async function showMyHeroes(ctx) {
     const heroes = await getPlayerHeroes(ctx.from.id);
     if (heroes.length === 0) {
-      return reply(ctx, '👥 قهرمانی نداری! از فروشگاه بخر.', {
-        reply_markup: { inline_keyboard: [[{ text: '🛒 فروشگاه', callback_data: 'shop' }], [{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]] }
-      });
+      return ctx.answerCbQuery('👥 قهرمانی نداری!', { show_alert: true });
     }
 
-    let msg = `👥 *قهرمانان من*\n\n`;
+    let msg = `👥 *قهرمانان*\n\n`;
     const buttons = [];
-    heroes.forEach(h => {
-      const t = h.template;
-      const maxHp = t.base_health * h.level;
-      const hpPercent = Math.floor((h.current_health / maxHp) * 100);
-      msg += `${rarityEmoji(t.rarity)} *${t.name}* Lv.${h.level} | ❤${hpPercent}%\n`;
-      buttons.push([{ text: `${rarityEmoji(t.rarity)} ${t.name} (❤${hpPercent}%)`, callback_data: `hero:${h.id}` }]);
-    });
+    for (let i = 0; i < heroes.length; i += 2) {
+      const row = [];
+      const h1 = heroes[i];
+      const maxHp1 = h1.template.base_health * h1.level;
+      const hp1 = Math.floor((h1.current_health / maxHp1) * 100);
+      row.push({ text: `${rarityEmoji(h1.template.rarity)} ${h1.template.name} ❤${hp1}%`, callback_data: `hero:${h1.id}` });
+      if (i + 1 < heroes.length) {
+        const h2 = heroes[i + 1];
+        const maxHp2 = h2.template.base_health * h2.level;
+        const hp2 = Math.floor((h2.current_health / maxHp2) * 100);
+        row.push({ text: `${rarityEmoji(h2.template.rarity)} ${h2.template.name} ❤${hp2}%`, callback_data: `hero:${h2.id}` });
+      }
+      buttons.push(row);
+    }
     buttons.push([{ text: '🛒 فروشگاه', callback_data: 'shop' }, { text: '🔙 بازگشت', callback_data: 'mainmenu' }]);
 
     await reply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
