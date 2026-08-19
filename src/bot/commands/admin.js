@@ -1,8 +1,7 @@
 const { ADMIN_ID, createGiftCode, getAllGiftCodes, toggleGiftCode, deleteGiftCode, addResources } = require('../../game/gift');
 const { getSupabase } = require('../../core/supabase');
-const { formatGold } = require('../../core/helpers');
+const { formatGold, cb } = require('../../core/helpers');
 
-// State برای ادمین
 const adminState = new Map();
 
 module.exports = function registerAdmin(bot) {
@@ -12,7 +11,7 @@ module.exports = function registerAdmin(bot) {
     await showAdminPanel(ctx);
   });
 
-  bot.action('admin', async (ctx) => {
+  bot.action(/admin:uid:(\d+)/, async (ctx) => {
     await ctx.answerCbQuery();
     if (ctx.from.id !== ADMIN_ID) return;
     adminState.delete(ctx.from.id);
@@ -20,46 +19,35 @@ module.exports = function registerAdmin(bot) {
   });
 
   // ═══ ساخت کد هدیه ═══
-  bot.action('admin_create_gift', async (ctx) => {
+  bot.action(/admin_create_gift:uid:(\d+)/, async (ctx) => {
     await ctx.answerCbQuery();
     if (ctx.from.id !== ADMIN_ID) return;
     
     adminState.set(ctx.from.id, 'create_gift');
     
     await ctx.editMessageText(
-      `🎁 *ساخت کد هدیه جدید*\n\n` +
-      `اطلاعات رو به این شکل بفرستید:\n\n` +
-      `📝 \`کد هدیه\`\n` +
-      `💰 \`مقدار سکه\`\n` +
-      `💎 \`مقدار الماس\`\n` +
-      `👥 \`تعداد مجاز (0 = نامحدود)\`\n` +
-      `⏰ \`ساعت انقضا (0 = بدون انقضا)\`\n\n` +
-      `*مثال:*\n` +
-      `\`EPWR2026\n1000\n50\n100\n24\`\n\n` +
-      `⚠️ الان منتظر اطلاعات هستم...`,
+      `🎁 *ساخت کد هدیه*\n\n` +
+      `بفرست:\n\`کد\nسکه\nالماس\nتعداد (0=نامحدود)\nساعت انقضا (0=بدون)\`\n\n` +
+      `*مثال:*\n\`EPWR2026\n1000\n50\n100\n24\``,
       {
         parse_mode: 'Markdown',
-        reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'admin' }]] }
+        reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: cb('admin', ctx.from.id) }]] }
       }
     );
   });
 
   // ═══ اضافه کردن منابع ═══
-  bot.action('admin_add_resources', async (ctx) => {
+  bot.action(/admin_add_resources:uid:(\d+)/, async (ctx) => {
     await ctx.answerCbQuery();
     if (ctx.from.id !== ADMIN_ID) return;
     
     adminState.set(ctx.from.id, 'add_resources');
     
     await ctx.editMessageText(
-      `💰 *اضافه کردن منابع*\n\n` +
-      `به این شکل بفرستید:\n\n` +
-      `\`آیدی عددی بازیکن\nمقدار سکه\nمقدار الماس\`\n\n` +
-      `*مثال:*\n\`123456789\n1000\n50\`\n\n` +
-      `⚠️ الان منتظر اطلاعات هستم...`,
+      `💰 *اضافه کردن منابع*\n\nبفرست:\n\`آیدی بازیکن\nسکه\nالماس\`\n\n*مثال:*\n\`123456789\n1000\n50\``,
       {
         parse_mode: 'Markdown',
-        reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'admin' }]] }
+        reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: cb('admin', ctx.from.id) }]] }
       }
     );
   });
@@ -97,11 +85,9 @@ module.exports = function registerAdmin(bot) {
       if (result.success) {
         await ctx.reply(
           `✅ *کد هدیه ساخته شد!*\n\n` +
-          `📝 کد: \`${code.toUpperCase()}\`\n` +
-          `💰 سکه: ${formatGold(gold)}\n` +
-          `💎 الماس: ${gems}\n` +
-          `👥 تعداد مجاز: ${maxUses || 'نامحدود'}\n` +
-          `⏰ انقضا: ${expiresAt ? new Date(expiresAt).toLocaleString('fa-IR') : 'بدون انقضا'}`,
+          `📝 \`${code.toUpperCase()}\`\n` +
+          `💰 ${formatGold(gold)} | 💎 ${gems}\n` +
+          `👥 ${maxUses || 'نامحدود'} | ⏰ ${expiresAt ? new Date(expiresAt).toLocaleString('fa-IR') : 'بدون انقضا'}`,
           { parse_mode: 'Markdown' }
         );
       } else {
@@ -124,7 +110,7 @@ module.exports = function registerAdmin(bot) {
 
       const result = await addResources(targetId, gold, gems);
       if (result.success) {
-        await ctx.reply(`✅ *منابع اضافه شد!*\n\n🆔 بازیکن: ${targetId}\n💰 سکه: +${formatGold(gold)}\n💎 الماس: +${gems}`, { parse_mode: 'Markdown' });
+        await ctx.reply(`✅ منابع اضافه شد!\n\n🆔 ${targetId}\n💰 +${formatGold(gold)} | 💎 +${gems}`, { parse_mode: 'Markdown' });
       } else {
         await ctx.reply(result.message);
       }
@@ -135,13 +121,13 @@ module.exports = function registerAdmin(bot) {
   });
 
   // ═══ لیست کدها ═══
-  bot.action('admin_list_gifts', async (ctx) => {
+  bot.action(/admin_list_gifts:uid:(\d+)/, async (ctx) => {
     await ctx.answerCbQuery();
     if (ctx.from.id !== ADMIN_ID) return;
     await showAdminGiftList(ctx);
   });
 
-  bot.action(/^admin_toggle:(.+)$/, async (ctx) => {
+  bot.action(/^admin_toggle:(.+):uid:(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     if (ctx.from.id !== ADMIN_ID) return;
     const result = await toggleGiftCode(ctx.match[1]);
@@ -151,7 +137,7 @@ module.exports = function registerAdmin(bot) {
     await showAdminGiftList(ctx);
   });
 
-  bot.action(/^admin_delete:(.+)$/, async (ctx) => {
+  bot.action(/^admin_delete:(.+):uid:(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     if (ctx.from.id !== ADMIN_ID) return;
     await deleteGiftCode(ctx.match[1]);
@@ -160,7 +146,7 @@ module.exports = function registerAdmin(bot) {
   });
 
   // ═══ آمار ═══
-  bot.action('admin_stats', async (ctx) => {
+  bot.action(/admin_stats:uid:(\d+)/, async (ctx) => {
     await ctx.answerCbQuery();
     if (ctx.from.id !== ADMIN_ID) return;
     const db = getSupabase();
@@ -169,23 +155,24 @@ module.exports = function registerAdmin(bot) {
     const { count: battleCount } = await db.from('battles').select('*', { count: 'exact', head: true });
 
     await ctx.editMessageText(
-      `📊 *آمار EPWR*\n\n👥 بازیکنان: ${playerCount || 0}\n🎁 کدهای هدیه: ${giftCount || 0}\n⚔️ جنگ‌ها: ${battleCount || 0}`,
-      { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'admin' }]] } }
+      `📊 *آمار EPWR*\n\n👥 بازیکنان: ${playerCount || 0}\n🎁 کدها: ${giftCount || 0}\n⚔️ جنگ‌ها: ${battleCount || 0}`,
+      { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: cb('admin', ctx.from.id) }]] } }
     );
   });
 
   async function showAdminPanel(ctx) {
+    const uid = ctx.from.id;
     await ctx.reply(
       `👑 *پنل مدیریت EPWR*\n\nخوش آمدی سازنده! 🛠️`,
       {
         parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
-            [{ text: '🎁 ساخت کد هدیه', callback_data: 'admin_create_gift' }],
-            [{ text: '📋 لیست کدهای هدیه', callback_data: 'admin_list_gifts' }],
-            [{ text: '💰 اضافه کردن منابع', callback_data: 'admin_add_resources' }],
-            [{ text: '📊 آمار ربات', callback_data: 'admin_stats' }],
-            [{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]
+            [{ text: '🎁 ساخت کد هدیه', callback_data: cb('admin_create_gift', uid) }],
+            [{ text: '📋 لیست کدها', callback_data: cb('admin_list_gifts', uid) }],
+            [{ text: '💰 اضافه کردن منابع', callback_data: cb('admin_add_resources', uid) }],
+            [{ text: '📊 آمار', callback_data: cb('admin_stats', uid) }],
+            [{ text: '🔙 بازگشت', callback_data: cb('mainmenu', uid) }]
           ]
         }
       }
@@ -194,24 +181,30 @@ module.exports = function registerAdmin(bot) {
 
   async function showAdminGiftList(ctx) {
     const codes = await getAllGiftCodes();
+    const uid = ctx.from.id;
+    
     if (codes.length === 0) {
-      return ctx.editMessageText('📭 کد هدیه‌ای وجود ندارد.', {
-        reply_markup: { inline_keyboard: [[{ text: '➕ ساخت کد جدید', callback_data: 'admin_create_gift' }], [{ text: '🔙 بازگشت', callback_data: 'admin' }]] }
+      return ctx.editMessageText('📭 کد هدیه‌ای نیست.', {
+        reply_markup: { inline_keyboard: [
+          [{ text: '➕ ساخت کد', callback_data: cb('admin_create_gift', uid) }],
+          [{ text: '🔙 بازگشت', callback_data: cb('admin', uid) }]
+        ]}
       });
     }
 
-    let msg = `🎁 *لیست کدهای هدیه*\n\n`;
+    let msg = `🎁 *کدهای هدیه*\n\n`;
     const buttons = [];
     codes.forEach(c => {
       const status = c.is_active ? '✅' : '❌';
       const uses = c.max_uses ? `${c.current_uses}/${c.max_uses}` : c.current_uses;
       msg += `${status} \`${c.code}\` | 💰${formatGold(c.gold_reward)} 💎${c.gems_reward} | 👥${uses}\n`;
       buttons.push([
-        { text: `${c.is_active ? '🚫' : '✅'} ${c.code}`, callback_data: `admin_toggle:${c.id}` },
-        { text: '🗑️', callback_data: `admin_delete:${c.id}` }
+        { text: `${c.is_active ? '🚫' : '✅'} ${c.code}`, callback_data: `admin_toggle:${c.id}:uid:${uid}` },
+        { text: '🗑️', callback_data: `admin_delete:${c.id}:uid:${uid}` }
       ]);
     });
-    buttons.push([{ text: '🔙 بازگشت', callback_data: 'admin' }]);
+    buttons.push([{ text: '🔙 بازگشت', callback_data: cb('admin', uid) }]);
+    
     await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
 };
