@@ -6,24 +6,19 @@ module.exports = function registerBattle(bot) {
   bot.command('battle', async (ctx) => { await showBattleMenu(ctx); });
   bot.action('battle', async (ctx) => { await ctx.answerCbQuery(); await showBattleMenu(ctx); });
 
-  // انتخاب NPC - چک session
   bot.action(/^battle_npc:(\d+)$/, async (ctx) => {
     const session = getSession(ctx.from.id);
-    if (session.targetType === 'npc' && session.target === parseInt(ctx.match[1])) {
-      return ctx.answerCbQuery('⚠️ قبلاً این حریف رو انتخاب کردی!', { show_alert: true });
-    }
-    await ctx.answerCbQuery();
     session.target = parseInt(ctx.match[1]);
     session.targetType = 'npc';
     session.selectedHeroes = [];
+    await ctx.answerCbQuery();
     await showHeroSelection(ctx);
   });
 
-  // Toggle قهرمان - چک session
   bot.action(/^toggle_hero:(.+)$/, async (ctx) => {
     const session = getSession(ctx.from.id);
     if (!session.target) {
-      return ctx.answerCbQuery('⚠️ لطفاً اول حریف انتخاب کن! (/battle)', { show_alert: true });
+      return ctx.answerCbQuery('⚠️ این منو برای شما نیست!\n/start بزنید.', { show_alert: true });
     }
     await ctx.answerCbQuery();
     const heroId = ctx.match[1];
@@ -33,46 +28,36 @@ module.exports = function registerBattle(bot) {
     await showHeroSelection(ctx);
   });
 
-  // تأیید و حمله - چک session
   bot.action('confirm_attack', async (ctx) => {
     const session = getSession(ctx.from.id);
     if (!session.target) {
-      return ctx.answerCbQuery('⚠️ لطفاً اول /battle بزن و حریف انتخاب کن!', { show_alert: true });
+      return ctx.answerCbQuery('⚠️ این منو برای شما نیست!\n/start بزنید.', { show_alert: true });
     }
     if (session.selectedHeroes.length === 0) {
-      return ctx.answerCbQuery('⚠️ قهرمانی انتخاب نکردی!', { show_alert: true });
+      return ctx.answerCbQuery('⚠️ قهرمان انتخاب کن!', { show_alert: true });
     }
     await ctx.answerCbQuery();
 
     const bots = await getBotRealms();
     const target = bots.find(b => b.id === session.target);
-    if (!target) return reply(ctx, '❌ حریف پیدا نشد!');
+    if (!target) return;
 
     const result = await fightNPC(ctx.from.id, target, session.selectedHeroes);
     clearSession(ctx.from.id);
 
-    if (!result.success) return reply(ctx, result.message);
+    if (!result.success) return ctx.answerCbQuery(result.message, { show_alert: true });
 
-    const emoji = result.playerWins ? '🏆' : '💀';
-    const title = result.playerWins ? 'پیروزی!' : 'شکست!';
-    let msg = `⚔️ *${title}*\n\n`;
-    msg += `━━━━━━━━━━━━━━━━\n`;
-    msg += `👤 قدرت تیم تو: ${result.playerPower}\n`;
-    msg += `${target.emoji} قدرت ${target.name}: ${result.botPower}\n`;
-    msg += `━━━━━━━━━━━━━━━━\n\n`;
+    const title = result.playerWins ? '🏆 پیروزی!' : '💀 شکست!';
+    let msg = `⚔️ *${title}*\n`;
+    msg += `⚡ تو: ${result.playerPower} | ${target.emoji} حریف: ${result.botPower}\n`;
 
     if (result.playerWins) {
-      msg += `💰 *${result.goldReward} Gold غنیمت گرفتی!*\n\n`;
-      msg += `🎉 ${target.name} فتح شد!\n`;
-      msg += `🔒 این سرزمین دیگه قابل حمله نیست.`;
+      msg += `💰 +${result.goldReward} Gold\n🎉 فتح شد!`;
     } else {
-      msg += `😤 شکست خوردی...\n\n`;
       if (result.deadHeroes.length > 0) {
-        msg += `💀 *قهرمانان کشته شده:*\n`;
-        result.deadHeroes.forEach(name => { msg += `   ☠️ ${name}\n`; });
-        msg += `\n⚠️ این قهرمانان حذف شدند!\nباید از فروشگاه قهرمان جدید بخری.`;
+        msg += `☠️ کشته: ${result.deadHeroes.join(', ')}`;
       } else {
-        msg += `🩹 قهرمانانت آسیب دیدند ولی زنده ماندند.`;
+        msg += `🩹 آسیب دیدند`;
       }
     }
 
@@ -81,7 +66,6 @@ module.exports = function registerBattle(bot) {
       reply_markup: {
         inline_keyboard: [
           [{ text: '⚔️ نبرد دوباره', callback_data: 'battle' }],
-          [{ text: '🛒 فروشگاه', callback_data: 'shop' }],
           [{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]
         ]
       }
@@ -91,72 +75,59 @@ module.exports = function registerBattle(bot) {
   async function showBattleMenu(ctx) {
     const bots = await getBotRealms();
     const defeated = await getDefeatedNPCs(ctx.from.id);
+    const available = bots.filter(b => !defeated.includes(b.id));
 
     let msg = `⚔️ *میدان نبرد*\n\n`;
-    msg += `🎯 حریفت رو انتخاب کن و بجنگ!\n\n`;
-
     const buttons = [];
 
-    bots.forEach(b => {
-      const isDefeated = defeated.includes(b.id);
-      if (!isDefeated) {
-        const stars = '⭐'.repeat(b.difficulty);
-        msg += `${b.emoji} *${b.name}* ${stars} | 💰${b.gold_reward_min}-${b.gold_reward_max}\n`;
-        buttons.push([{ text: `${b.emoji} حمله به ${b.name}`, callback_data: `battle_npc:${b.id}` }]);
-      }
-    });
-
-    if (buttons.length === 0) {
-      msg += `\n🎉 *همه سرزمین‌ها فتح شدن!*`;
+    if (available.length === 0) {
+      msg += `🎉 همه فتح شدن!`;
+    } else {
+      available.forEach(b => {
+        msg += `${b.emoji} *${b.name}* ${'⭐'.repeat(b.difficulty)} | 💰${b.gold_reward_min}-${b.gold_reward_max}\n`;
+        buttons.push([{ text: `${b.emoji} ${b.name}`, callback_data: `battle_npc:${b.id}` }]);
+      });
     }
 
-    buttons.push([{ text: '👥 جنگ PvP', callback_data: 'pvp' }]);
-    buttons.push([{ text: '🗺️ نقشه جهان', callback_data: 'world' }]);
+    buttons.push([{ text: '👥 PvP', callback_data: 'pvp' }, { text: '🗺️ جهان', callback_data: 'world' }]);
     buttons.push([{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]);
 
-    await reply(ctx, msg, {
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard: buttons }
-    });
+    await reply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
 
   async function showHeroSelection(ctx) {
     const heroes = await getPlayerHeroes(ctx.from.id);
     if (heroes.length === 0) {
-      return reply(ctx, '❌ قهرمان زنده‌ای نداری! اول از فروشگاه بخر.', {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '🛒 فروشگاه', callback_data: 'shop' }],
-            [{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]
-          ]
-        }
-      });
+      return ctx.answerCbQuery('❌ قهرمان نداری! از فروشگاه بخر.', { show_alert: true });
     }
 
     const session = getSession(ctx.from.id);
-    let msg = `🎯 *قهرمانانت رو انتخاب کن*\n\n`;
+    let msg = `🎯 *انتخاب قهرمان*\n\n`;
     const buttons = [];
 
-    heroes.forEach(h => {
-      const t = h.template;
-      const selected = session.selectedHeroes.includes(h.id);
-      const icon = selected ? '✅' : '⬜';
-      const hpPercent = Math.floor((h.current_health / (t.base_health * h.level)) * 100);
-      msg += `${icon} *${t.name}* Lv.${h.level} (❤${hpPercent}%) 🗡${t.base_attack} 🛡${t.base_defense}\n`;
-      buttons.push([{ text: `${icon} ${t.name} (❤${hpPercent}%)`, callback_data: `toggle_hero:${h.id}` }]);
-    });
+    for (let i = 0; i < heroes.length; i += 2) {
+      const row = [];
+      const h1 = heroes[i];
+      const s1 = session.selectedHeroes.includes(h1.id);
+      const hp1 = Math.floor((h1.current_health / (h1.template.base_health * h1.level)) * 100);
+      row.push({ text: `${s1 ? '✅' : '⬜'} ${h1.template.name} ❤${hp1}%`, callback_data: `toggle_hero:${h1.id}` });
+      if (i + 1 < heroes.length) {
+        const h2 = heroes[i + 1];
+        const s2 = session.selectedHeroes.includes(h2.id);
+        const hp2 = Math.floor((h2.current_health / (h2.template.base_health * h2.level)) * 100);
+        row.push({ text: `${s2 ? '✅' : '⬜'} ${h2.template.name} ❤${hp2}%`, callback_data: `toggle_hero:${h2.id}` });
+      }
+      buttons.push(row);
+    }
 
     const power = calcTeamPower(heroes.filter(h => session.selectedHeroes.includes(h.id)));
-    msg += `\n⚡ قدرت تیم: *${power}*\n`;
+    msg += `⚡ قدرت: *${power}*\n`;
 
     buttons.push([
-      { text: `⚔️ حمله! (${session.selectedHeroes.length} قهرمان)`, callback_data: 'confirm_attack' },
+      { text: `⚔️ حمله (${session.selectedHeroes.length})`, callback_data: 'confirm_attack' },
       { text: '🔙 بازگشت', callback_data: 'battle' }
     ]);
 
-    await ctx.editMessageText(msg, {
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard: buttons }
-    });
+    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
 };
