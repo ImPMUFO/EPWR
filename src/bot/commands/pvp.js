@@ -8,16 +8,14 @@ module.exports = function registerPvP(bot) {
     await ctx.answerCbQuery();
     const targets = await findPvPTargets(ctx.from.id);
     if (targets.length === 0) {
-      return reply(ctx, '👥 بازیکنی برای جنگ نیست!', {
-        reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'battle' }]] }
-      });
+      return ctx.answerCbQuery('👥 بازیکنی نیست!', { show_alert: true });
     }
 
-    let msg = `🎯 *انتخاب حریف PvP*\n\n`;
+    let msg = `👥 *جنگ PvP*\n\n`;
     const buttons = [];
     targets.forEach(t => {
-      msg += `👤 *${t.commander_name}* Lv.${t.level} | 💰${formatGold(t.gold)}\n`;
-      buttons.push([{ text: `⚔️ حمله به ${t.commander_name}`, callback_data: `pvp_target:${t.telegram_id}` }]);
+      msg += `👤 ${t.commander_name} Lv.${t.level}\n`;
+      buttons.push([{ text: `⚔️ ${t.commander_name}`, callback_data: `pvp_target:${t.telegram_id}` }]);
     });
     buttons.push([{ text: '🔙 بازگشت', callback_data: 'battle' }]);
     await reply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
@@ -35,7 +33,7 @@ module.exports = function registerPvP(bot) {
   bot.action(/^toggle_hero_pvp:(.+)$/, async (ctx) => {
     const session = getSession(ctx.from.id);
     if (!session.target || session.targetType !== 'pvp') {
-      return ctx.answerCbQuery('⚠️ لطفاً اول حریف PvP انتخاب کن!', { show_alert: true });
+      return ctx.answerCbQuery('⚠️ این منو برای شما نیست!\n/start بزنید.', { show_alert: true });
     }
     await ctx.answerCbQuery();
     const heroId = ctx.match[1];
@@ -48,48 +46,51 @@ module.exports = function registerPvP(bot) {
   bot.action('pvp_confirm', async (ctx) => {
     const session = getSession(ctx.from.id);
     if (!session.target || session.targetType !== 'pvp') {
-      return ctx.answerCbQuery('⚠️ لطفاً اول /battle بزن و PvP انتخاب کن!', { show_alert: true });
+      return ctx.answerCbQuery('⚠️ این منو برای شما نیست!\n/start بزنید.', { show_alert: true });
     }
     if (session.selectedHeroes.length === 0) {
-      return ctx.answerCbQuery('⚠️ قهرمانی انتخاب نکردی!', { show_alert: true });
+      return ctx.answerCbQuery('⚠️ قهرمان انتخاب کن!', { show_alert: true });
     }
     await ctx.answerCbQuery();
 
     const result = await executePvP(ctx.from.id, session.target, session.selectedHeroes);
     clearSession(ctx.from.id);
 
-    if (!result.success) return reply(ctx, result.message);
+    if (!result.success) return ctx.answerCbQuery(result.message, { show_alert: true });
 
-    let msg = `⚔️ *جنگ PvP*\n\n`;
-    msg += result.attackerWins ? `🏆 *پیروزی!*\n` : `💀 *شکست!*\n`;
-    msg += `🎯 حریف: ${result.defenderName}\n`;
-    msg += `⚡ قدرت تو: ${result.attackerPower}\n`;
-    msg += `⚡ قدرت حریف: ${result.defenderPower}\n`;
+    let msg = result.attackerWins ? `🏆 *پیروزی!*\n` : `💀 *شکست!*\n`;
+    msg += `⚡ تو: ${result.attackerPower} | حریف: ${result.defenderPower}\n`;
     if (result.attackerWins && result.goldStolen > 0) {
-      msg += `\n💰 *${result.goldStolen} Gold دزدیدی!*`;
+      msg += `💰 +${result.goldStolen} Gold`;
     }
 
     await ctx.editMessageText(msg, {
       parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard: [[{ text: '⚔️ نبرد دوباره', callback_data: 'battle' }], [{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]] }
+      reply_markup: { inline_keyboard: [[{ text: '⚔️ دوباره', callback_data: 'battle' }], [{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]] }
     });
   });
 
   async function showHeroSelectionPvP(ctx) {
     const heroes = await getPlayerHeroes(ctx.from.id);
     const session = getSession(ctx.from.id);
-    let msg = `🎯 *قهرمانانت رو انتخاب کن (PvP)*\n\n`;
+    let msg = `🎯 *انتخاب قهرمان (PvP)*\n\n`;
     const buttons = [];
 
-    heroes.forEach(h => {
-      const selected = session.selectedHeroes.includes(h.id);
-      const icon = selected ? '✅' : '⬜';
-      msg += `${icon} *${h.template.name}* Lv.${h.level}\n`;
-      buttons.push([{ text: `${icon} ${h.template.name}`, callback_data: `toggle_hero_pvp:${h.id}` }]);
-    });
+    for (let i = 0; i < heroes.length; i += 2) {
+      const row = [];
+      const h1 = heroes[i];
+      const s1 = session.selectedHeroes.includes(h1.id);
+      row.push({ text: `${s1 ? '✅' : '⬜'} ${h1.template.name}`, callback_data: `toggle_hero_pvp:${h1.id}` });
+      if (i + 1 < heroes.length) {
+        const h2 = heroes[i + 1];
+        const s2 = session.selectedHeroes.includes(h2.id);
+        row.push({ text: `${s2 ? '✅' : '⬜'} ${h2.template.name}`, callback_data: `toggle_hero_pvp:${h2.id}` });
+      }
+      buttons.push(row);
+    }
 
     buttons.push([
-      { text: `⚔️ حمله! (${session.selectedHeroes.length})`, callback_data: 'pvp_confirm' },
+      { text: `⚔️ حمله (${session.selectedHeroes.length})`, callback_data: 'pvp_confirm' },
       { text: '🔙 بازگشت', callback_data: 'pvp' }
     ]);
     await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
