@@ -6,21 +6,11 @@ module.exports = function registerStart(bot) {
   bot.start(async (ctx) => {
     try {
       const player = await getOrCreatePlayer(ctx.from);
-
-      let msg = `⚔️ *به EPWR خوش آمدی!*\n\n`;
-      msg += `━━━━━━━━━━━━━━━━\n`;
-      msg += `👑 فرمانده: *${player.commander_name}*\n`;
-      msg += `🏰 قلمرو: ${player.realm_name}\n`;
-      msg += `⭐ سطح: ${player.level}\n`;
-      msg += `━━━━━━━━━━━━━━━━\n`;
-      msg += `💰 ${formatGold(player.gold)} Gold\n`;
-      msg += `💎 ${player.gems} Gems\n`;
-      msg += `━━━━━━━━━━━━━━━━\n\n`;
-      msg += `🎯 آماده‌ای برای نبرد حماسی؟`;
-
+      let msg = `⚔️ *EPWR*\n\n`;
+      msg += `👑 ${player.commander_name} | ⭐ Lv.${player.level}\n`;
+      msg += `💰 ${formatGold(player.gold)} | 💎 ${player.gems}`;
       await reply(ctx, msg, { parse_mode: 'Markdown', ...mainMenu });
     } catch (e) {
-      console.error('Start error:', e);
       await reply(ctx, '⚠️ خطا: ' + e.message);
     }
   });
@@ -28,12 +18,9 @@ module.exports = function registerStart(bot) {
   bot.action('mainmenu', async (ctx) => {
     await ctx.answerCbQuery();
     const player = await getOrCreatePlayer(ctx.from);
-
-    let msg = `⚔️ *منوی اصلی*\n\n`;
-    msg += `👑 ${player.commander_name}\n`;
-    msg += `💰 ${formatGold(player.gold)} | 💎 ${player.gems}\n`;
-    msg += `⭐ Lv.${player.level}`;
-
+    let msg = `⚔️ *EPWR*\n\n`;
+    msg += `👑 ${player.commander_name} | ⭐ Lv.${player.level}\n`;
+    msg += `💰 ${formatGold(player.gold)} | 💎 ${player.gems}`;
     await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...mainMenu });
   });
 };
