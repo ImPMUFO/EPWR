@@ -1,6 +1,5 @@
 const { getSupabase } = require('../core/supabase');
 
-// State موقت برای انتخاب قهرمان در جنگ
 const battleSessions = new Map();
 
 function getSession(telegramId) {
@@ -19,7 +18,8 @@ async function getPlayerHeroes(telegramId) {
   const { data } = await db
     .from('player_characters')
     .select(`id, level, current_health, template:character_templates (id, name, base_attack, base_defense, base_health, rarity, image_url)`)
-    .eq('telegram_id', telegramId);
+    .eq('telegram_id', telegramId)
+    .gt('current_health', 0);
   return data || [];
 }
 
@@ -27,6 +27,14 @@ async function getBotRealms() {
   const db = getSupabase();
   const { data } = await db.from('bot_realms').select('*').order('difficulty');
   return data || [];
+}
+
+async function getDefeatedNPCs(telegramId) {
+  const db = getSupabase();
+  const { data } = await db.from('npc_defeated')
+    .select('bot_realm_id')
+    .eq('telegram_id', telegramId);
+  return (data || []).map(d => d.bot_realm_id);
 }
 
 function calcTeamPower(heroes) {
@@ -49,25 +57,41 @@ async function fightNPC(telegramId, botRealm, selectedHeroIds) {
 
   const goldReward = botRealm.gold_reward_min + Math.floor(Math.random() * (botRealm.gold_reward_max - botRealm.gold_reward_min));
 
+  const deadHeroes = [];
+
   if (playerWins) {
+    // پیروزی: سکه بگیر و NPC رو علامت بزن
     const { data: player } = await db.from('players').select('gold').eq('telegram_id', telegramId).single();
     await db.from('players').update({ gold: player.gold + goldReward }).eq('telegram_id', telegramId);
-  }
+    await db.from('npc_defeated').insert({ telegram_id: telegramId, bot_realm_id: botRealm.id });
 
-  await db.from('battles').insert({
-    attacker_id: telegramId,
-    defender_id: telegramId,
-    winner_id: playerWins ? telegramId : -1,
-    gold_stolen: playerWins ? goldReward : 0,
-    attacker_power: playerPower,
-    defender_power: botPower
-  });
+    // قهرمان‌ها کمی سلامتی کم می‌کنن ولی نمی‌میرن
+    for (const hero of selected) {
+      const damage = Math.floor(Math.random() * 10) + 5;
+      const newHp = Math.max(1, hero.current_health - damage);
+      await db.from('player_characters').update({ current_health: newHp }).eq('id', hero.id);
+    }
+  } else {
+    // شکست: قهرمان‌ها آسیب جدی می‌بینن
+    for (const hero of selected) {
+      const damage = Math.floor(botPower / selected.length) + Math.floor(Math.random() * 15);
+      const newHp = hero.current_health - damage;
+
+      if (newHp <= 0) {
+        // قهرمان مرد!
+        await db.from('player_characters').delete().eq('id', hero.id);
+        deadHeroes.push(hero.template.name);
+      } else {
+        await db.from('player_characters').update({ current_health: newHp }).eq('id', hero.id);
+      }
+    }
+  }
 
   return {
     success: true, playerWins, playerPower, botPower,
     goldReward: playerWins ? goldReward : 0,
-    botRealm, selectedHeroes: selected
+    botRealm, selectedHeroes: selected, deadHeroes
   };
 }
 
-module.exports = { getSession, clearSession, getPlayerHeroes, getBotRealms, calcTeamPower, fightNPC };
+module.exports = { getSession, clearSession, getPlayerHeroes, getBotRealms, getDefeatedNPCs, calcTeamPower, fightNPC };
