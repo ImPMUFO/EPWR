@@ -1,4 +1,4 @@
-const { getSession, clearSession, getPlayerHeroes, getBotRealms, getDefeatedNPCs, calcTeamPower, fightNPC } = require('../../game/battle');
+const { getSession, hasActiveSession, clearSession, getPlayerHeroes, getBotRealms, getDefeatedNPCs, calcTeamPower, fightNPC } = require('../../game/battle');
 const { formatGold, reply } = require('../../core/helpers');
 
 module.exports = function registerBattle(bot) {
@@ -16,11 +16,11 @@ module.exports = function registerBattle(bot) {
   });
 
   bot.action(/^toggle_hero:(.+)$/, async (ctx) => {
-    const session = getSession(ctx.from.id);
-    if (!session.target) {
+    if (!hasActiveSession(ctx.from.id)) {
       return ctx.answerCbQuery('⚠️ این منو برای شما نیست!\n/start بزنید.', { show_alert: true });
     }
     await ctx.answerCbQuery();
+    const session = getSession(ctx.from.id);
     const heroId = ctx.match[1];
     const idx = session.selectedHeroes.indexOf(heroId);
     if (idx >= 0) session.selectedHeroes.splice(idx, 1);
@@ -29,10 +29,10 @@ module.exports = function registerBattle(bot) {
   });
 
   bot.action('confirm_attack', async (ctx) => {
-    const session = getSession(ctx.from.id);
-    if (!session.target) {
+    if (!hasActiveSession(ctx.from.id)) {
       return ctx.answerCbQuery('⚠️ این منو برای شما نیست!\n/start بزنید.', { show_alert: true });
     }
+    const session = getSession(ctx.from.id);
     if (session.selectedHeroes.length === 0) {
       return ctx.answerCbQuery('⚠️ قهرمان انتخاب کن!', { show_alert: true });
     }
