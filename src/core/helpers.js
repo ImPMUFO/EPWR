@@ -10,4 +10,20 @@ function formatGold(amount) {
   return Number(amount).toLocaleString('en-US');
 }
 
-module.exports = { rarityEmoji, rarityName, formatGold };
+// ریپلای روی پیام کاربر
+function getReplyParams(ctx) {
+  if (ctx.message) {
+    return { message_id: ctx.message.message_id };
+  }
+  if (ctx.callbackQuery && ctx.callbackQuery.message) {
+    return { message_id: ctx.callbackQuery.message.message_id };
+  }
+  return undefined;
+}
+
+async function reply(ctx, text, options = {}) {
+  const reply_parameters = getReplyParams(ctx);
+  return ctx.reply(text, { ...options, reply_parameters });
+}
+
+module.exports = { rarityEmoji, rarityName, formatGold, getReplyParams, reply };
