@@ -1,81 +1,117 @@
+const { getSession, clearSession, getPlayerHeroes, getBotRealms, calcTeamPower, fightNPC } = require('../../game/battle');
 const { getOrCreatePlayer } = require('../../game/player');
-const { findOpponent, executeBattle, getEquippedHero } = require('../../game/battle');
 const { formatGold } = require('../../core/helpers');
 
 module.exports = function registerBattle(bot) {
 
-  // دستور /battle
-  bot.command('battle', async (ctx) => {
-    try { await startBattle(ctx); }
-    catch (e) { ctx.reply('⚠️ خطا: ' + e.message); }
-  });
+  bot.command('battle', async (ctx) => { await showBattleMenu(ctx); });
+  bot.action('battle', async (ctx) => { await ctx.answerCbQuery(); await showBattleMenu(ctx); });
 
-  // دکمه نبرد
-  bot.action('battle', async (ctx) => {
+  // انتخاب NPC
+  bot.action(/^battle_npc:(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
-    await startBattle(ctx);
+    const session = getSession(ctx.from.id);
+    session.target = parseInt(ctx.match[1]);
+    session.targetType = 'npc';
+    session.selectedHeroes = [];
+    await showHeroSelection(ctx);
   });
 
-  async function startBattle(ctx) {
-    const player = await getOrCreatePlayer(ctx.from);
+  // Toggle قهرمان
+  bot.action(/^toggle_hero:(.+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const session = getSession(ctx.from.id);
+    const heroId = ctx.match[1];
+    const idx = session.selectedHeroes.indexOf(heroId);
+    if (idx >= 0) session.selectedHeroes.splice(idx, 1);
+    else session.selectedHeroes.push(heroId);
+    await showHeroSelection(ctx);
+  });
 
-    // بررسی قهرمان تجهیز شده
-    const hero = await getEquippedHero(ctx.from.id);
-    if (!hero) {
-      return ctx.reply(
-        `⚠️ *اول یک قهرمان تجهیز کن!*\n\nاز فروشگاه قهرمان بخر و دکمه "تجهیز کردن" رو بزن.`,
-        {
-          parse_mode: 'Markdown',
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: '🛒 رفتن به فروشگاه', callback_data: 'shop' }]
-            ]
-          }
-        }
-      );
-    }
+  // تأیید و حمله
+  bot.action('confirm_attack', async (ctx) => {
+    await ctx.answerCbQuery();
+    const session = getSession(ctx.from.id);
+    if (!session.target) return ctx.reply('❌ حریفی انتخاب نشده!');
 
-    // پیدا کردن حریف
-    await ctx.reply(`🔍 در حال پیدا کردن حریف...`);
+    if (session.targetType === 'npc') {
+      const bots = await getBotRealms();
+      const target = bots.find(b => b.id === session.target);
+      if (!target) return ctx.reply('❌ حریف پیدا نشد!');
 
-    const opponent = await findOpponent(ctx.from.id);
-    if (!opponent) {
-      return ctx.reply('⚠️ حریفی پیدا نشد! بعداً دوباره تلاش کن.');
-    }
+      const result = await fightNPC(ctx.from.id, target, session.selectedHeroes);
+      clearSession(ctx.from.id);
 
-    // اجرای جنگ
-    const result = await executeBattle(ctx.from.id, opponent.telegram_id);
+      if (!result.success) return ctx.reply(result.message);
 
-    if (!result.success) {
-      return ctx.reply(result.message);
-    }
-
-    // نمایش نتیجه
-    const isAttackerWin = result.attackerWins;
-    const emoji = isAttackerWin ? '🏆' : '💀';
-    const title = isAttackerWin ? 'پیروزی!' : 'شکست!';
-
-    let message = `⚔️ *نتیجه نبرد*\n\n`;
-    message += `${emoji} *${title}*\n\n`;
-    message += `👤 تو: ${player.commander_name} (قدرت: ${result.attackerPower})\n`;
-    message += `🎯 حریف: ${opponent.commander_name} (قدرت: ${result.defenderPower})\n\n`;
-
-    if (isAttackerWin) {
-      message += `💰 *${result.goldStolen} Gold دزدیدی!*\n`;
-      message += `🎉 تبریک!`;
-    } else {
-      message += `💰 *${result.goldStolen} Gold از دست دادی!*\n`;
-      message += `😤 دفعه بعد انتقام می‌گیری!`;
-    }
-
-    await ctx.reply(message, {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '⚔️ نبرد دوباره', callback_data: 'battle' }],
-          [{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]
-        ]
+      const emoji = result.playerWins ? '🏆' : '💀';
+      const title = result.playerWins ? 'پیروزی!' : 'شکست!';
+      let msg = `⚔️ *${title}*\n\n`;
+      msg += `👤 قدرت تیم تو: ${result.playerPower}\n`;
+      msg += `${target.emoji} قدرت ${target.name}: ${result.botPower}\n\n`;
+      if (result.playerWins) {
+        msg += `💰 *${result.goldReward} Gold غنیمت گرفتی!*\n🎉 آفرین فرمانده!`;
+      } else {
+        msg += `😤 شکست خوردی... ولی نگران نباش!\n💪 قوی‌تر شو و دوباره حمله کن!`;
       }
+
+      await ctx.editMessageText(msg, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: [[{ text: '⚔️ نبرد دوباره', callback_data: 'battle' }], [{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]] }
+      });
+    }
+  });
+
+  async function showBattleMenu(ctx) {
+    const bots = await getBotRealms();
+    let msg = `⚔️ *میدان نبرد*\n\n🎯 حریفت رو انتخاب کن:\n\n`;
+    const buttons = [];
+
+    bots.forEach(b => {
+      const stars = '⭐'.repeat(b.difficulty);
+      msg += `${b.emoji} *${b.name}* ${stars}\n   💰 پاداش: ${b.gold_reward_min}-${b.gold_reward_max} Gold\n\n`;
+      buttons.push([{ text: `${b.emoji} حمله به ${b.name}`, callback_data: `battle_npc:${b.id}` }]);
+    });
+
+    buttons.push([{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]);
+
+    await ctx.reply(msg, {
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: buttons }
+    });
+  }
+
+  async function showHeroSelection(ctx) {
+    const heroes = await getPlayerHeroes(ctx.from.id);
+    if (heroes.length === 0) {
+      return ctx.reply('❌ قهرمانی نداری! اول از فروشگاه بخر.', {
+        reply_markup: { inline_keyboard: [[{ text: '🛒 فروشگاه', callback_data: 'shop' }]] }
+      });
+    }
+
+    const session = getSession(ctx.from.id);
+    let msg = `🎯 *قهرمانانت رو انتخاب کن*\n\n`;
+    const buttons = [];
+
+    heroes.forEach(h => {
+      const t = h.template;
+      const selected = session.selectedHeroes.includes(h.id);
+      const icon = selected ? '✅' : '⬜';
+      msg += `${icon} *${t.name}* Lv.${h.level} (🗡${t.base_attack} 🛡${t.base_defense})\n`;
+      buttons.push([{ text: `${icon} ${t.name}`, callback_data: `toggle_hero:${h.id}` }]);
+    });
+
+    const power = calcTeamPower(heroes.filter(h => session.selectedHeroes.includes(h.id)));
+    msg += `\n⚡ قدرت تیم: *${power}*\n`;
+
+    buttons.push([
+      { text: `⚔️ حمله! (${session.selectedHeroes.length} قهرمان)`, callback_data: 'confirm_attack' },
+      { text: '🔙 بازگشت', callback_data: 'battle' }
+    ]);
+
+    await ctx.editMessageText(msg, {
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: buttons }
     });
   }
 };
