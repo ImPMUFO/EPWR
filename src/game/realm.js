@@ -1,5 +1,6 @@
 const { getSupabase } = require('../core/supabase');
 
+// جمع‌آوری سکه هر ۱۰ دقیقه
 async function collectGold(telegramId) {
   const db = getSupabase();
   const now = new Date();
@@ -12,14 +13,18 @@ async function collectGold(telegramId) {
 
   let totalGold = 0;
   const details = [];
+  const INTERVAL_MS = 10 * 60 * 1000; // ۱۰ دقیقه
 
   for (const item of items || []) {
     const last = new Date(item.last_collected_at);
-    const hoursPassed = Math.floor((now - last) / (1000 * 60 * 60));
-    if (hoursPassed >= 1) {
-      const gold = item.item.effect_value * hoursPassed;
+    const minutesPassed = Math.floor((now - last) / (1000 * 60));
+    
+    if (minutesPassed >= 10) {
+      // هر ۱۰ دقیقه یکبار جمع می‌شه
+      const cycles = Math.floor(minutesPassed / 10);
+      const gold = item.item.effect_value * cycles;
       totalGold += gold;
-      details.push(`${item.item.name}: ${gold} Gold`);
+      details.push(`${item.item.name}: ${gold} Gold (${cycles}x)`);
       await db.from('player_items').update({ last_collected_at: now.toISOString() }).eq('id', item.id);
     }
   }
