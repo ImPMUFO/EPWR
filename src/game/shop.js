@@ -1,15 +1,28 @@
 const { getSupabase } = require('../core/supabase');
+const { getCached, setCache, clearCache } = require('../core/helpers');
 
 async function getAllCharacters() {
+  const cacheKey = 'characters';
+  const cached = getCached(cacheKey, 300000);
+  if (cached) return cached;
+
   const db = getSupabase();
   const { data } = await db.from('character_templates').select('*').order('price_gold');
-  return data || [];
+  const result = data || [];
+  setCache(cacheKey, result);
+  return result;
 }
 
 async function getAllItems() {
+  const cacheKey = 'items';
+  const cached = getCached(cacheKey, 300000);
+  if (cached) return cached;
+
   const db = getSupabase();
   const { data } = await db.from('shop_items').select('*').order('price_gold');
-  return data || [];
+  const result = data || [];
+  setCache(cacheKey, result);
+  return result;
 }
 
 async function getCharacterById(id) {
@@ -43,6 +56,7 @@ async function purchaseCharacter(telegramId, player, template) {
     level: 1, current_health: template.base_health, xp: 0, is_equipped: false
   });
 
+  clearCache(`heroes:${telegramId}`);
   return { success: true };
 }
 
@@ -60,11 +74,9 @@ async function purchaseItem(telegramId, player, item) {
   return { success: true };
 }
 
-// استفاده از معجون سلامتی
 async function usePotion(telegramId, heroId) {
   const db = getSupabase();
 
-  // پیدا کردن معجون
   const { data: potionItem } = await db
     .from('player_items')
     .select('id, item:shop_items (id, type, effect_value)')
@@ -74,10 +86,9 @@ async function usePotion(telegramId, heroId) {
     .maybeSingle();
 
   if (!potionItem || potionItem.item.type !== 'potion') {
-    return { success: false, message: '❌ معجون سلامتی نداری! از فروشگاه بخر.' };
+    return { success: false, message: '❌ معجون نداری!' };
   }
 
-  // پیدا کردن قهرمان
   const { data: hero } = await db
     .from('player_characters')
     .select('id, current_health, template:character_templates (base_health, name)')
@@ -88,20 +99,19 @@ async function usePotion(telegramId, heroId) {
 
   const maxHp = hero.template.base_health;
   if (hero.current_health >= maxHp) {
-    return { success: false, message: '❌ سلامتی قهرمان پر است!' };
+    return { success: false, message: '❌ سلامتی پر است!' };
   }
 
-  // اعمال معجون
   const healAmount = potionItem.item.effect_value;
   const newHp = Math.min(maxHp, hero.current_health + healAmount);
 
   await db.from('player_characters').update({ current_health: newHp }).eq('id', heroId);
   await db.from('player_items').delete().eq('id', potionItem.id);
 
+  clearCache(`heroes:${telegramId}`);
   return { success: true, heroName: hero.template.name, newHp, maxHp };
 }
 
-// لیست آیتم‌های بازیکن
 async function getPlayerItems(telegramId) {
   const db = getSupabase();
   const { data } = await db
