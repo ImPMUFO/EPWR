@@ -15,20 +15,18 @@ async function getBot() {
     return next();
   });
 
-  require('./commands/start')(botInstance);
-  require('./commands/profile')(botInstance);
-  require('./commands/shop')(botInstance);
-  require('./commands/battle')(botInstance);
-  require('./commands/world')(botInstance);
-  require('./commands/realm')(botInstance);
-  require('./commands/ranking')(botInstance);
-  require('./commands/gift')(botInstance);
-  require('./commands/admin')(botInstance);
-  require('./commands/settings')(botInstance);
-  require('./commands/alliance')(botInstance);
-  require('./commands/quest')(botInstance);
-  require('./commands/pvp')(botInstance);
+  // فقط دستورات اصلی
+  try { require('./commands/start')(botInstance); } catch(e) { console.error('start.js error:', e.message); }
+  try { require('./commands/shop')(botInstance); } catch(e) { console.error('shop.js error:', e.message); }
+  try { require('./commands/battle')(botInstance); } catch(e) { console.error('battle.js error:', e.message); }
+  try { require('./commands/realm')(botInstance); } catch(e) { console.error('realm.js error:', e.message); }
+  try { require('./commands/world')(botInstance); } catch(e) { console.error('world.js error:', e.message); }
+  try { require('./commands/ranking')(botInstance); } catch(e) { console.error('ranking.js error:', e.message); }
+  try { require('./commands/settings')(botInstance); } catch(e) { console.error('settings.js error:', e.message); }
+  try { require('./commands/gift')(botInstance); } catch(e) { console.error('gift.js error:', e.message); }
+  try { require('./commands/admin')(botInstance); } catch(e) { console.error('admin.js error:', e.message); }
 
+  console.log('✅ Bot initialized');
   return botInstance;
 }
 
