@@ -1,14 +1,13 @@
 const { getOrCreatePlayer } = require('../../game/player');
 const { getAllCharacters, getAllItems, getCharacterById, getItemById, purchaseCharacter, purchaseItem, usePotion, getPlayerItems } = require('../../game/shop');
 const { getPlayerHeroes, getHeroById } = require('../../game/heroes');
-const { rarityEmoji, rarityName, formatGold } = require('../../core/helpers');
+const { rarityEmoji, rarityName, formatGold, reply } = require('../../core/helpers');
 
 module.exports = function registerShop(bot) {
 
-  bot.command('shop', async (ctx) => { try { await showShop(ctx); } catch(e) { ctx.reply('⚠️ ' + e.message); } });
+  bot.command('shop', async (ctx) => { try { await showShop(ctx); } catch(e) { await reply(ctx, '⚠️ ' + e.message); } });
   bot.action('shop', async (ctx) => { await ctx.answerCbQuery(); await showShop(ctx); });
 
-  // خرید قهرمان
   bot.action(/^buy_char:(\d+)$/, async (ctx) => {
     const template = await getCharacterById(parseInt(ctx.match[1]));
     if (!template) return ctx.answerCbQuery('❌ پیدا نشد', { show_alert: true });
@@ -19,7 +18,6 @@ module.exports = function registerShop(bot) {
     await showShop(ctx);
   });
 
-  // خرید آیتم
   bot.action(/^buy_item:(\d+)$/, async (ctx) => {
     const item = await getItemById(parseInt(ctx.match[1]));
     if (!item) return ctx.answerCbQuery('❌ پیدا نشد', { show_alert: true });
@@ -30,11 +28,9 @@ module.exports = function registerShop(bot) {
     await showShop(ctx);
   });
 
-  // لیست قهرمانان
-  bot.command('myheroes', async (ctx) => { try { await showMyHeroes(ctx); } catch(e) { ctx.reply('⚠️ ' + e.message); } });
+  bot.command('myheroes', async (ctx) => { try { await showMyHeroes(ctx); } catch(e) { await reply(ctx, '⚠️ ' + e.message); } });
   bot.action('myheroes', async (ctx) => { await ctx.answerCbQuery(); await showMyHeroes(ctx); });
 
-  // جزئیات قهرمان
   bot.action(/^hero:(.+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const hero = await getHeroById(ctx.match[1]);
@@ -47,7 +43,7 @@ module.exports = function registerShop(bot) {
     msg += `❤ سلامتی: ${hero.current_health}/${maxHp} (${hpPercent}%)\n`;
     msg += `🗡 حمله: ${t.base_attack + (hero.level-1)*2}\n`;
     msg += `🛡 دفاع: ${t.base_defense + (hero.level-1)*2}\n`;
-    msg += `✨ XP: ${hero.xp}\n`;
+    msg += `✨ XP: ${hero.xp || 0}\n`;
 
     const buttons = [];
     if (hero.current_health < maxHp) {
@@ -56,13 +52,9 @@ module.exports = function registerShop(bot) {
     buttons.push([{ text: '👥 لیست قهرمانان', callback_data: 'myheroes' }]);
     buttons.push([{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]);
 
-    await ctx.editMessageText(msg, {
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard: buttons }
-    });
+    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   });
 
-  // استفاده از معجون
   bot.action(/^use_potion:(.+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const result = await usePotion(ctx.from.id, ctx.match[1]);
@@ -74,13 +66,11 @@ module.exports = function registerShop(bot) {
     }
   });
 
-  // لیست آیتم‌های بازیکن
   bot.action('myitems', async (ctx) => {
     await ctx.answerCbQuery();
     const items = await getPlayerItems(ctx.from.id);
-    
     if (items.length === 0) {
-      return ctx.reply('📦 آیتمی نداری! از فروشگاه بخر.', {
+      return reply(ctx, '📦 آیتمی نداری! از فروشگاه بخر.', {
         reply_markup: { inline_keyboard: [[{ text: '🛒 فروشگاه', callback_data: 'shop' }], [{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]] }
       });
     }
@@ -91,7 +81,7 @@ module.exports = function registerShop(bot) {
       msg += `• ${i.item.name} (${i.item.effect_value}) - ${status}\n`;
     });
 
-    await ctx.reply(msg, {
+    await ctx.editMessageText(msg, {
       parse_mode: 'Markdown',
       reply_markup: { inline_keyboard: [[{ text: '🛒 فروشگاه', callback_data: 'shop' }], [{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]] }
     });
@@ -131,13 +121,13 @@ module.exports = function registerShop(bot) {
     ]);
     buttons.push([{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]);
 
-    await ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+    await reply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
 
   async function showMyHeroes(ctx) {
     const heroes = await getPlayerHeroes(ctx.from.id);
     if (heroes.length === 0) {
-      return ctx.reply('👥 قهرمانی نداری! از فروشگاه بخر.', {
+      return reply(ctx, '👥 قهرمانی نداری! از فروشگاه بخر.', {
         reply_markup: { inline_keyboard: [[{ text: '🛒 فروشگاه', callback_data: 'shop' }], [{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]] }
       });
     }
@@ -153,6 +143,6 @@ module.exports = function registerShop(bot) {
     });
     buttons.push([{ text: '🛒 فروشگاه', callback_data: 'shop' }, { text: '🔙 بازگشت', callback_data: 'mainmenu' }]);
 
-    await ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+    await reply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
 };
