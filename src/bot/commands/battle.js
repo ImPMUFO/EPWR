@@ -104,6 +104,7 @@ module.exports = function registerBattle(bot) {
     }
 
     buttons.push([{ text: '🗺️ نقشه جهان', callback_data: 'world' }]);
+buttons.push([{ text: '👥 جنگ با بازیکنان (PvP)', callback_data: 'pvp' }]);
     buttons.push([{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]);
 
     await ctx.reply(msg, {
