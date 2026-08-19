@@ -7,15 +7,13 @@ async function getBot() {
   botInstance = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
   botInstance.catch((err) => console.error('Bot error:', err));
 
-  const registerStart = require('./commands/start');
-  const registerProfile = require('./commands/profile');
-  const registerShop = require('./commands/shop');
-  const registerBattle = require('./commands/battle');
-
-  registerStart(botInstance);
-  registerProfile(botInstance);
-  registerShop(botInstance);
-  registerBattle(botInstance);
+  require('./commands/start')(botInstance);
+  require('./commands/profile')(botInstance);
+  require('./commands/shop')(botInstance);
+  require('./commands/battle')(botInstance);
+  require('./commands/world')(botInstance);
+  require('./commands/realm')(botInstance);
+  require('./commands/ranking')(botInstance);
 
   console.log('Bot initialized');
   return botInstance;
