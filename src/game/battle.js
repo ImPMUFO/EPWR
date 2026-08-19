@@ -1,104 +1,73 @@
 const { getSupabase } = require('../core/supabase');
 
-async function getEquippedHero(telegramId) {
+// State موقت برای انتخاب قهرمان در جنگ
+const battleSessions = new Map();
+
+function getSession(telegramId) {
+  if (!battleSessions.has(telegramId)) {
+    battleSessions.set(telegramId, { selectedHeroes: [], target: null, targetType: null });
+  }
+  return battleSessions.get(telegramId);
+}
+
+function clearSession(telegramId) {
+  battleSessions.delete(telegramId);
+}
+
+async function getPlayerHeroes(telegramId) {
   const db = getSupabase();
   const { data } = await db
     .from('player_characters')
-    .select(`
-      id, level, current_health,
-      template:character_templates (
-        id, name, base_attack, base_defense, base_health
-      )
-    `)
-    .eq('telegram_id', telegramId)
-    .eq('is_equipped', true)
-    .maybeSingle();
-
-  return data;
+    .select(`id, level, current_health, template:character_templates (id, name, base_attack, base_defense, base_health, rarity, image_url)`)
+    .eq('telegram_id', telegramId);
+  return data || [];
 }
 
-function calculatePower(hero) {
-  if (!hero) return 0;
-  const t = hero.template;
-  const basePower = t.base_attack + t.base_defense;
-  const levelBonus = hero.level * 5;
-  return basePower + levelBonus;
-}
-
-async function findOpponent(attackerId) {
+async function getBotRealms() {
   const db = getSupabase();
-  const { data: opponents } = await db
-    .from('players')
-    .select('telegram_id, commander_name')
-    .neq('telegram_id', attackerId)
-    .limit(10);
-
-  if (!opponents || opponents.length === 0) return null;
-  const random = Math.floor(Math.random() * opponents.length);
-  return opponents[random];
+  const { data } = await db.from('bot_realms').select('*').order('difficulty');
+  return data || [];
 }
 
-async function executeBattle(attackerId, defenderId) {
+function calcTeamPower(heroes) {
+  return heroes.reduce((sum, h) => {
+    const t = h.template;
+    return sum + t.base_attack + t.base_defense + h.level * 5;
+  }, 0);
+}
+
+async function fightNPC(telegramId, botRealm, selectedHeroIds) {
   const db = getSupabase();
+  const heroes = await getPlayerHeroes(telegramId);
+  const selected = heroes.filter(h => selectedHeroIds.includes(h.id));
 
-  const attackerHero = await getEquippedHero(attackerId);
-  const defenderHero = await getEquippedHero(defenderId);
+  if (selected.length === 0) return { success: false, message: '❌ قهرمانی انتخاب نکردی!' };
 
-  if (!attackerHero) {
-    return { success: false, message: '❌ اول باید یک قهرمان تجهیز کنی!' };
-  }
-  if (!defenderHero) {
-    return { success: false, message: '❌ حریف قهرمان تجهیز شده ندارد!' };
+  const playerPower = calcTeamPower(selected) + Math.floor(Math.random() * 15);
+  const botPower = botRealm.bot_power + Math.floor(Math.random() * 10);
+  const playerWins = playerPower >= botPower;
+
+  const goldReward = botRealm.gold_reward_min + Math.floor(Math.random() * (botRealm.gold_reward_max - botRealm.gold_reward_min));
+
+  if (playerWins) {
+    const { data: player } = await db.from('players').select('gold').eq('telegram_id', telegramId).single();
+    await db.from('players').update({ gold: player.gold + goldReward }).eq('telegram_id', telegramId);
   }
 
-  // محاسبه قدرت
-  const attackerPower = calculatePower(attackerHero) + Math.floor(Math.random() * 10);
-  const defenderPower = calculatePower(defenderHero) + Math.floor(Math.random() * 10);
-
-  const attackerWins = attackerPower >= defenderPower;
-  const winnerId = attackerWins ? attackerId : defenderId;
-  const loserId = attackerWins ? defenderId : attackerId;
-
-  // مقدار سکه دزدیده شده (بین 50 تا 200)
-  const goldStolen = 50 + Math.floor(Math.random() * 151);
-
-  // بررسی موجودی بازنده
-  const { data: loser } = await db.from('players')
-    .select('gold').eq('telegram_id', loserId).single();
-
-  const actualGold = Math.min(goldStolen, loser.gold);
-
-  // انتقال سکه
-  const { data: winner } = await db.from('players')
-    .select('gold').eq('telegram_id', winnerId).single();
-
-  await db.from('players').update({ gold: loser.gold - actualGold })
-    .eq('telegram_id', loserId);
-  await db.from('players').update({ gold: winner.gold + actualGold })
-    .eq('telegram_id', winnerId);
-
-  // ذخیره تاریخچه جنگ
   await db.from('battles').insert({
-    attacker_id: attackerId,
-    defender_id: defenderId,
-    attacker_hero_id: attackerHero.id,
-    defender_hero_id: defenderHero.id,
-    winner_id: winnerId,
-    gold_stolen: actualGold,
-    attacker_power: attackerPower,
-    defender_power: defenderPower
+    attacker_id: telegramId,
+    defender_id: telegramId,
+    winner_id: playerWins ? telegramId : -1,
+    gold_stolen: playerWins ? goldReward : 0,
+    attacker_power: playerPower,
+    defender_power: botPower
   });
 
   return {
-    success: true,
-    attackerWins,
-    winnerId,
-    goldStolen: actualGold,
-    attackerPower,
-    defenderPower,
-    attackerHero,
-    defenderHero
+    success: true, playerWins, playerPower, botPower,
+    goldReward: playerWins ? goldReward : 0,
+    botRealm, selectedHeroes: selected
   };
 }
 
-module.exports = { getEquippedHero, findOpponent, executeBattle };
+module.exports = { getSession, clearSession, getPlayerHeroes, getBotRealms, calcTeamPower, fightNPC };
