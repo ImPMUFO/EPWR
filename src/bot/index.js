@@ -14,6 +14,8 @@ async function getBot() {
   require('./commands/world')(botInstance);
   require('./commands/realm')(botInstance);
   require('./commands/ranking')(botInstance);
+  require('./commands/gift')(botInstance);
+  require('./commands/admin')(botInstance);
 
   console.log('Bot initialized');
   return botInstance;
