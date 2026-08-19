@@ -25,4 +25,16 @@ const mainMenu = {
   }
 };
 
-module.exports = { mainMenu };
+const adminMenu = {
+  reply_markup: {
+    inline_keyboard: [
+      [{ text: '🎁 ساخت کد هدیه', callback_data: 'admin_create_gift' }],
+      [{ text: '📋 لیست کدهای هدیه', callback_data: 'admin_list_gifts' }],
+      [{ text: '💰 اضافه کردن منابع', callback_data: 'admin_add_resources' }],
+      [{ text: '📊 آمار ربات', callback_data: 'admin_stats' }],
+      [{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]
+    ]
+  }
+};
+
+module.exports = { mainMenu, adminMenu };
