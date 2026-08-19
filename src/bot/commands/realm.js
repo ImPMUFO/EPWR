@@ -2,7 +2,6 @@ const { getOrCreatePlayer } = require('../../game/player');
 const { collectGold } = require('../../game/realm');
 const { getSupabase } = require('../../core/supabase');
 const { formatGold } = require('../../core/helpers');
-const { mainMenu } = require('../keyboards');
 
 module.exports = function registerRealm(bot) {
 
@@ -12,14 +11,12 @@ module.exports = function registerRealm(bot) {
     const player = await getOrCreatePlayer(ctx.from);
     const db = getSupabase();
 
-    // دریافت دستگاه‌های فعال
     const { data: devices } = await db
       .from('player_items')
       .select('id, item:shop_items (name, effect_value, type), is_active, last_collected_at')
       .eq('telegram_id', ctx.from.id)
       .eq('is_active', true);
 
-    // دریافت قهرمان‌ها
     const { data: heroes } = await db
       .from('player_characters')
       .select('id, level, current_health, template:character_templates (name, base_health)')
@@ -36,18 +33,16 @@ module.exports = function registerRealm(bot) {
     msg += `⚙️ Iron: ${formatGold(player.iron)}\n`;
     msg += `━━━━━━━━━━━━━━━━\n\n`;
 
-    // دستگاه‌ها
     if (devices && devices.length > 0) {
       msg += `🏭 *دستگاه‌های فعال:*\n`;
       devices.forEach(d => {
-        msg += `   ⚡ ${d.item.name} (+${d.item.effect_value}/ساعت)\n`;
+        msg += `   ⚡ ${d.item.name} (+${d.item.effect_value} هر ۱۰ دقیقه)\n`;
       });
       msg += `\n`;
     } else {
       msg += `🏭 دستگاهی ندارید!\nاز فروشگاه دستگاه سکه‌ساز بخرید.\n\n`;
     }
 
-    // قهرمان‌ها
     if (heroes && heroes.length > 0) {
       msg += `⚔️ *قهرمانان: ${heroes.length}*\n`;
     }
@@ -81,7 +76,7 @@ module.exports = function registerRealm(bot) {
       msg += `\n💰 مجموع: +${formatGold(result.totalGold)} Gold\n`;
     } else {
       msg += `⏳ منابعی برای جمع‌آوری نیست.\n`;
-      msg += `دستگاه‌ها هر ساعت سکه تولید می‌کنند!\n`;
+      msg += `دستگاه‌ها هر ۱۰ دقیقه سکه تولید می‌کنند!\n`;
     }
 
     msg += `━━━━━━━━━━━━━━━━\n\n`;
