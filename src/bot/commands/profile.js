@@ -1,37 +1,28 @@
-const { PlayerService } = require('../../game/player/PlayerService');
-const { getMainMenuKeyboard } = require('../keyboards/mainMenu');
-const logger = require('../../core/logger');
+const { getOrCreatePlayer } = require('../../game/player');
+const { formatGold } = require('../../core/helpers');
+const { mainMenu } = require('../keyboards');
 
-function registerProfile(bot) {
+module.exports = function registerProfile(bot) {
   bot.command('profile', async (ctx) => {
     try {
-      const playerService = new PlayerService();
-      const player = await playerService.getOrCreate(ctx.from);
-
-      const profileMessage = `👑 **پروفایل فرمانده**
-
-🆔 ID: ${player.telegram_id}
-👤 نام: ${player.commander_name}
-🏰 قلمرو: ${player.realm_name}
-⭐ سطح: ${player.level}
-✨ تجربه: ${player.xp}
-
-💰 Gold: ${player.gold.toLocaleString()}
-💎 Gems: ${player.gems}
-🍖 Food: ${player.food.toLocaleString()}
-🪵 Wood: ${player.wood.toLocaleString()}
-🪨 Stone: ${player.stone.toLocaleString()}
-⚙️ Iron: ${player.iron.toLocaleString()}`;
-
-      await ctx.reply(profileMessage, {
-        parse_mode: 'Markdown',
-        ...getMainMenuKeyboard()
-      });
-    } catch (error) {
-      logger.error('خطا در /profile', error);
-      await ctx.reply('⚠️ خطایی رخ داد.');
+      const player = await getOrCreatePlayer(ctx.from);
+      await ctx.reply(
+        `👑 *پروفایل فرمانده*\n\n` +
+        `🆔 ID: ${player.telegram_id}\n` +
+        `👤 نام: ${player.commander_name}\n` +
+        `🏰 قلمرو: ${player.realm_name}\n` +
+        `⭐ سطح: ${player.level}\n` +
+        `✨ تجربه: ${player.xp}\n\n` +
+        `💰 Gold: ${formatGold(player.gold)}\n` +
+        `💎 Gems: ${player.gems}\n` +
+        `🍖 Food: ${formatGold(player.food)}\n` +
+        `🪵 Wood: ${formatGold(player.wood)}\n` +
+        `🪨 Stone: ${formatGold(player.stone)}\n` +
+        `⚙️ Iron: ${formatGold(player.iron)}`,
+        { parse_mode: 'Markdown', ...mainMenu }
+      );
+    } catch (e) {
+      ctx.reply('⚠️ خطا: ' + e.message);
     }
   });
-}
-
-module.exports = { registerProfile };
+};
