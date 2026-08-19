@@ -15,7 +15,7 @@ module.exports = function registerStart(bot) {
     }
   });
 
-  bot.action(/mainmenu:uid:(\d+)/, async (ctx) => {
+  bot.action(/^mainmenu:(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const player = await getOrCreatePlayer(ctx.from);
     let msg = `⚔️ *EPWR*\n\n`;
