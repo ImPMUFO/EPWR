@@ -10,10 +10,12 @@ async function getBot() {
   const registerStart = require('./commands/start');
   const registerProfile = require('./commands/profile');
   const registerShop = require('./commands/shop');
+  const registerBattle = require('./commands/battle');
 
   registerStart(botInstance);
   registerProfile(botInstance);
   registerShop(botInstance);
+  registerBattle(botInstance);
 
   console.log('Bot initialized');
   return botInstance;
