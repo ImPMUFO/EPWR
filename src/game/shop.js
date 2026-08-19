@@ -1,28 +1,15 @@
 const { getSupabase } = require('../core/supabase');
-const { getCached, setCache, clearCache } = require('../core/helpers');
 
 async function getAllCharacters() {
-  const cacheKey = 'characters';
-  const cached = getCached(cacheKey, 300000);
-  if (cached) return cached;
-
   const db = getSupabase();
   const { data } = await db.from('character_templates').select('*').order('price_gold');
-  const result = data || [];
-  setCache(cacheKey, result);
-  return result;
+  return data || [];
 }
 
 async function getAllItems() {
-  const cacheKey = 'items';
-  const cached = getCached(cacheKey, 300000);
-  if (cached) return cached;
-
   const db = getSupabase();
   const { data } = await db.from('shop_items').select('*').order('price_gold');
-  const result = data || [];
-  setCache(cacheKey, result);
-  return result;
+  return data || [];
 }
 
 async function getCharacterById(id) {
@@ -45,18 +32,14 @@ async function purchaseCharacter(telegramId, player, template) {
   if (template.price_gems > 0 && player.gems < template.price_gems) {
     return { success: false, message: `❌ Gems کافی نداری! نیاز: ${template.price_gems}` };
   }
-
   const updates = {};
   if (template.price_gold > 0) updates.gold = player.gold - template.price_gold;
   if (template.price_gems > 0) updates.gems = player.gems - template.price_gems;
   await db.from('players').update(updates).eq('telegram_id', telegramId);
-
   await db.from('player_characters').insert({
     telegram_id: telegramId, template_id: template.id,
     level: 1, current_health: template.base_health, xp: 0, is_equipped: false
   });
-
-  clearCache(`heroes:${telegramId}`);
   return { success: true };
 }
 
@@ -65,18 +48,15 @@ async function purchaseItem(telegramId, player, item) {
   if (item.price_gold > 0 && player.gold < item.price_gold) {
     return { success: false, message: `❌ Gold کافی نداری! نیاز: ${item.price_gold}` };
   }
-
   await db.from('players').update({ gold: player.gold - item.price_gold }).eq('telegram_id', telegramId);
   await db.from('player_items').insert({
     telegram_id: telegramId, item_id: item.id, is_active: item.type === 'generator'
   });
-
   return { success: true };
 }
 
 async function usePotion(telegramId, heroId) {
   const db = getSupabase();
-
   const { data: potionItem } = await db
     .from('player_items')
     .select('id, item:shop_items (id, type, effect_value)')
@@ -84,31 +64,23 @@ async function usePotion(telegramId, heroId) {
     .eq('is_active', false)
     .limit(1)
     .maybeSingle();
-
   if (!potionItem || potionItem.item.type !== 'potion') {
     return { success: false, message: '❌ معجون نداری!' };
   }
-
   const { data: hero } = await db
     .from('player_characters')
     .select('id, current_health, template:character_templates (base_health, name)')
     .eq('id', heroId)
     .single();
-
   if (!hero) return { success: false, message: '❌ قهرمان پیدا نشد!' };
-
   const maxHp = hero.template.base_health;
   if (hero.current_health >= maxHp) {
     return { success: false, message: '❌ سلامتی پر است!' };
   }
-
   const healAmount = potionItem.item.effect_value;
   const newHp = Math.min(maxHp, hero.current_health + healAmount);
-
   await db.from('player_characters').update({ current_health: newHp }).eq('id', heroId);
   await db.from('player_items').delete().eq('id', potionItem.id);
-
-  clearCache(`heroes:${telegramId}`);
   return { success: true, heroName: hero.template.name, newHp, maxHp };
 }
 
