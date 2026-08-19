@@ -6,16 +6,20 @@ module.exports = function registerStart(bot) {
   bot.start(async (ctx) => {
     try {
       const player = await getOrCreatePlayer(ctx.from);
-      await ctx.reply(
-        `⚔️ *به EPWR خوش آمدی!*\n\n` +
-        `👑 فرمانده: ${player.commander_name}\n` +
-        `🏰 قلمرو: ${player.realm_name}\n` +
-        `⭐ سطح: ${player.level}\n\n` +
-        `💰 ${formatGold(player.gold)} Gold\n` +
-        `💎 ${player.gems} Gems\n\n` +
-        `آماده‌ای برای نبرد حماسی؟`,
-        { parse_mode: 'Markdown', ...mainMenu }
-      );
+
+      let msg = `⚔️ *به EPWR خوش آمدی!*\n\n`;
+      msg += `━━━━━━━━━━━━━━━━\n`;
+      msg += `👑 فرمانده: *${player.commander_name}*\n`;
+      msg += `🏰 قلمرو: ${player.realm_name}\n`;
+      msg += `⭐ سطح: ${player.level}\n`;
+      msg += `━━━━━━━━━━━━━━━━\n`;
+      msg += `💰 ${formatGold(player.gold)} Gold\n`;
+      msg += `💎 ${player.gems} Gems\n`;
+      msg += `━━━━━━━━━━━━━━━━\n\n`;
+      msg += `🎯 آماده‌ای برای نبرد حماسی؟\n`;
+      msg += `⚔️ قهرمان بخر، ارتش بساز، دشمنان رو شکست بده!`;
+
+      await ctx.reply(msg, { parse_mode: 'Markdown', ...mainMenu });
     } catch (e) {
       console.error('Start error:', e);
       ctx.reply('⚠️ خطا: ' + e.message);
@@ -25,17 +29,12 @@ module.exports = function registerStart(bot) {
   bot.action('mainmenu', async (ctx) => {
     await ctx.answerCbQuery();
     const player = await getOrCreatePlayer(ctx.from);
-    await ctx.editMessageText(
-      `⚔️ *منوی اصلی*\n\n👑 ${player.commander_name}\n💰 ${formatGold(player.gold)} | 💎 ${player.gems}`,
-      { parse_mode: 'Markdown', ...mainMenu }
-    );
-  });
 
-  const placeholders = ['realm', 'army', 'world', 'resources', 'ranking', 'alliance', 'settings'];
-  placeholders.forEach(key => {
-    bot.action(key, async (ctx) => {
-      await ctx.answerCbQuery();
-      await ctx.reply(`🚧 این بخش به زودی اضافه می‌شود!`);
-    });
+    let msg = `⚔️ *منوی اصلی*\n\n`;
+    msg += `👑 ${player.commander_name}\n`;
+    msg += `💰 ${formatGold(player.gold)} | 💎 ${player.gems}\n`;
+    msg += `⭐ Lv.${player.level}`;
+
+    await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...mainMenu });
   });
 };
