@@ -1,5 +1,5 @@
 const { findPvPTargets, executePvP } = require('../../game/pvp');
-const { getPlayerHeroes, getSession, clearSession } = require('../../game/battle');
+const { getPlayerHeroes, getSession, hasActiveSession, clearSession } = require('../../game/battle');
 const { formatGold, reply } = require('../../core/helpers');
 
 module.exports = function registerPvP(bot) {
@@ -31,11 +31,11 @@ module.exports = function registerPvP(bot) {
   });
 
   bot.action(/^toggle_hero_pvp:(.+)$/, async (ctx) => {
-    const session = getSession(ctx.from.id);
-    if (!session.target || session.targetType !== 'pvp') {
+    if (!hasActiveSession(ctx.from.id)) {
       return ctx.answerCbQuery('⚠️ این منو برای شما نیست!\n/start بزنید.', { show_alert: true });
     }
     await ctx.answerCbQuery();
+    const session = getSession(ctx.from.id);
     const heroId = ctx.match[1];
     const idx = session.selectedHeroes.indexOf(heroId);
     if (idx >= 0) session.selectedHeroes.splice(idx, 1);
@@ -44,10 +44,10 @@ module.exports = function registerPvP(bot) {
   });
 
   bot.action('pvp_confirm', async (ctx) => {
-    const session = getSession(ctx.from.id);
-    if (!session.target || session.targetType !== 'pvp') {
+    if (!hasActiveSession(ctx.from.id)) {
       return ctx.answerCbQuery('⚠️ این منو برای شما نیست!\n/start بزنید.', { show_alert: true });
     }
+    const session = getSession(ctx.from.id);
     if (session.selectedHeroes.length === 0) {
       return ctx.answerCbQuery('⚠️ قهرمان انتخاب کن!', { show_alert: true });
     }
