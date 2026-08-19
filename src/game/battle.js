@@ -1,4 +1,5 @@
 const { getSupabase } = require('../core/supabase');
+const { getCached, setCache, clearCache } = require('../core/helpers');
 
 const battleSessions = new Map();
 
@@ -14,37 +15,51 @@ function getSession(telegramId) {
   return battleSessions.get(telegramId);
 }
 
-function hasActiveSession(telegramId) {
-  const session = battleSessions.get(telegramId);
-  return session && session.target !== null;
-}
-
 function clearSession(telegramId) {
   battleSessions.delete(telegramId);
 }
 
 async function getPlayerHeroes(telegramId) {
+  const cacheKey = `heroes:${telegramId}`;
+  const cached = getCached(cacheKey, 30000);
+  if (cached) return cached;
+
   const db = getSupabase();
   const { data } = await db
     .from('player_characters')
-    .select(`id, level, xp, current_health, template:character_templates (id, name, base_attack, base_defense, base_health, rarity, image_url)`)
+    .select(`id, level, xp, current_health, template:character_templates (id, name, base_attack, base_defense, base_health, rarity)`)
     .eq('telegram_id', telegramId)
     .gt('current_health', 0);
-  return data || [];
+  
+  const result = data || [];
+  setCache(cacheKey, result);
+  return result;
 }
 
 async function getBotRealms() {
+  const cacheKey = 'bot_realms';
+  const cached = getCached(cacheKey, 300000);
+  if (cached) return cached;
+
   const db = getSupabase();
   const { data } = await db.from('bot_realms').select('*').order('difficulty');
-  return data || [];
+  const result = data || [];
+  setCache(cacheKey, result);
+  return result;
 }
 
 async function getDefeatedNPCs(telegramId) {
+  const cacheKey = `defeated:${telegramId}`;
+  const cached = getCached(cacheKey, 60000);
+  if (cached) return cached;
+
   const db = getSupabase();
   const { data } = await db.from('npc_defeated')
     .select('bot_realm_id')
     .eq('telegram_id', telegramId);
-  return (data || []).map(d => d.bot_realm_id);
+  const result = (data || []).map(d => d.bot_realm_id);
+  setCache(cacheKey, result);
+  return result;
 }
 
 function calcTeamPower(heroes) {
@@ -103,6 +118,10 @@ async function fightNPC(telegramId, botRealm, selectedHeroIds) {
     }
   }
 
+  // پاک کردن cache بعد از جنگ
+  clearCache(`heroes:${telegramId}`);
+  clearCache(`defeated:${telegramId}`);
+
   return {
     success: true, playerWins, playerPower, botPower,
     goldReward: playerWins ? goldReward : 0,
@@ -110,4 +129,4 @@ async function fightNPC(telegramId, botRealm, selectedHeroIds) {
   };
 }
 
-module.exports = { getSession, hasActiveSession, clearSession, getPlayerHeroes, getBotRealms, getDefeatedNPCs, calcTeamPower, fightNPC };
+module.exports = { getSession, clearSession, getPlayerHeroes, getBotRealms, getDefeatedNPCs, calcTeamPower, fightNPC };
