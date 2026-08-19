@@ -18,6 +18,8 @@ async function getBot() {
   require('./commands/admin')(botInstance);
   require('./commands/settings')(botInstance);
   require('./commands/alliance')(botInstance);
+  require('./commands/quest')(botInstance);
+  require('./commands/pvp')(botInstance);
 
   console.log('Bot initialized');
   return botInstance;
