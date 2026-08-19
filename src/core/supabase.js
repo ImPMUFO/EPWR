@@ -1,21 +1,16 @@
 const { createClient } = require('@supabase/supabase-js');
 
-let supabaseClient = null;
+let supabase = null;
 
 function getSupabase() {
-  if (!supabaseClient) {
-    const url = process.env.SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
-    if (!url || !key) {
-      throw new Error('SUPABASE_URL و SUPABASE_SERVICE_ROLE_KEY باید تنظیم شوند');
-    }
-    
-    supabaseClient = createClient(url, key, {
-      auth: { persistSession: false }
-    });
+  if (!supabase) {
+    supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      { auth: { persistSession: false } }
+    );
   }
-  return supabaseClient;
+  return supabase;
 }
 
 module.exports = { getSupabase };
