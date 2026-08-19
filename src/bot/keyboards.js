@@ -14,10 +14,11 @@ const mainMenu = {
         { text: '💰 منابع', callback_data: 'resources' }
       ],
       [
-        { text: '🏆 رتبه‌بندی', callback_data: 'ranking' },
-        { text: '🤝 اتحاد', callback_data: 'alliance' }
+        { text: '🎁 کد هدیه', callback_data: 'gift' },
+        { text: '🏆 رتبه‌بندی', callback_data: 'ranking' }
       ],
       [
+        { text: '🤝 اتحاد', callback_data: 'alliance' },
         { text: '⚙️ تنظیمات', callback_data: 'settings' }
       ]
     ]
