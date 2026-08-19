@@ -13,13 +13,6 @@ module.exports = function registerStart(bot) {
     }
   });
 
-  bot.action(/^battle\|(\d+)$/, async (ctx) => {
-    await ctx.answerCbQuery();
-    const { showBattleMenu } = require('./battle');
-    if (showBattleMenu) await showBattleMenu(ctx);
-    else await require('./battle').default(ctx);
-  });
-
   bot.action(/^mainmenu\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const player = await getOrCreatePlayer(ctx.from);
