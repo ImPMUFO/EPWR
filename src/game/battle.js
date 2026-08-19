@@ -4,9 +4,19 @@ const battleSessions = new Map();
 
 function getSession(telegramId) {
   if (!battleSessions.has(telegramId)) {
-    battleSessions.set(telegramId, { selectedHeroes: [], target: null, targetType: null });
+    battleSessions.set(telegramId, { 
+      selectedHeroes: [], 
+      target: null, 
+      targetType: null,
+      ownerId: telegramId 
+    });
   }
   return battleSessions.get(telegramId);
+}
+
+function hasActiveSession(telegramId) {
+  const session = battleSessions.get(telegramId);
+  return session && session.target !== null;
 }
 
 function clearSession(telegramId) {
@@ -63,7 +73,6 @@ async function fightNPC(telegramId, botRealm, selectedHeroIds) {
     await db.from('players').update({ gold: player.gold + goldReward }).eq('telegram_id', telegramId);
     await db.from('npc_defeated').insert({ telegram_id: telegramId, bot_realm_id: botRealm.id });
 
-    // XP و آسیب جزئی به قهرمان‌ها
     for (const hero of selected) {
       const xpGained = 10 + botRealm.difficulty * 5;
       const newXp = (hero.xp || 0) + xpGained;
@@ -81,7 +90,6 @@ async function fightNPC(telegramId, botRealm, selectedHeroIds) {
       }).eq('id', hero.id);
     }
   } else {
-    // شکست: قهرمان‌ها آسیب جدی می‌بینن
     for (const hero of selected) {
       const damage = Math.floor(botPower / selected.length) + Math.floor(Math.random() * 15);
       const newHp = hero.current_health - damage;
@@ -102,4 +110,4 @@ async function fightNPC(telegramId, botRealm, selectedHeroIds) {
   };
 }
 
-module.exports = { getSession, clearSession, getPlayerHeroes, getBotRealms, getDefeatedNPCs, calcTeamPower, fightNPC };
+module.exports = { getSession, hasActiveSession, clearSession, getPlayerHeroes, getBotRealms, getDefeatedNPCs, calcTeamPower, fightNPC };
