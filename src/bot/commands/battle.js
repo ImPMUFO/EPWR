@@ -1,13 +1,12 @@
 const { getSession, clearSession, getPlayerHeroes, getBotRealms, getDefeatedNPCs, calcTeamPower, fightNPC } = require('../../game/battle');
 const { formatGold, reply, cb } = require('../../core/helpers');
-const { buildMainMenu } = require('../keyboards');
 
 module.exports = function registerBattle(bot) {
 
   bot.command('battle', async (ctx) => { await showBattleMenu(ctx); });
-  bot.action(/battle:uid:(\d+)/, async (ctx) => { await ctx.answerCbQuery(); await showBattleMenu(ctx); });
+  bot.action(/^battle:(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showBattleMenu(ctx); });
 
-  bot.action(/battle_npc:(\d+):uid:(\d+)/, async (ctx) => {
+  bot.action(/^battle_npc:(\d+):(\d+)$/, async (ctx) => {
     const session = getSession(ctx.from.id);
     session.target = parseInt(ctx.match[1]);
     session.targetType = 'npc';
@@ -16,7 +15,7 @@ module.exports = function registerBattle(bot) {
     await showHeroSelection(ctx);
   });
 
-  bot.action(/toggle_hero:(.+):uid:(\d+)/, async (ctx) => {
+  bot.action(/^toggle_hero:(.+):(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const session = getSession(ctx.from.id);
     const heroId = ctx.match[1];
@@ -26,7 +25,7 @@ module.exports = function registerBattle(bot) {
     await showHeroSelection(ctx);
   });
 
-  bot.action(/confirm_attack:uid:(\d+)/, async (ctx) => {
+  bot.action(/^confirm_attack:(\d+)$/, async (ctx) => {
     const session = getSession(ctx.from.id);
     if (session.selectedHeroes.length === 0) {
       return ctx.answerCbQuery('⚠️ قهرمان انتخاب کن!', { show_alert: true });
@@ -81,7 +80,7 @@ module.exports = function registerBattle(bot) {
     } else {
       available.forEach(b => {
         msg += `${b.emoji} *${b.name}* ${'⭐'.repeat(b.difficulty)} | 💰${b.gold_reward_min}-${b.gold_reward_max}\n`;
-        buttons.push([{ text: `${b.emoji} ${b.name}`, callback_data: `battle_npc:${b.id}:uid:${uid}` }]);
+        buttons.push([{ text: `${b.emoji} ${b.name}`, callback_data: `battle_npc:${b.id}:${uid}` }]);
       });
     }
 
@@ -110,12 +109,12 @@ module.exports = function registerBattle(bot) {
       const h1 = heroes[i];
       const s1 = session.selectedHeroes.includes(h1.id);
       const hp1 = Math.floor((h1.current_health / (h1.template.base_health * h1.level)) * 100);
-      row.push({ text: `${s1 ? '✅' : '⬜'} ${h1.template.name} ❤${hp1}%`, callback_data: `toggle_hero:${h1.id}:uid:${uid}` });
+      row.push({ text: `${s1 ? '✅' : '⬜'} ${h1.template.name} ❤${hp1}%`, callback_data: `toggle_hero:${h1.id}:${uid}` });
       if (i + 1 < heroes.length) {
         const h2 = heroes[i + 1];
         const s2 = session.selectedHeroes.includes(h2.id);
         const hp2 = Math.floor((h2.current_health / (h2.template.base_health * h2.level)) * 100);
-        row.push({ text: `${s2 ? '✅' : '⬜'} ${h2.template.name} ❤${hp2}%`, callback_data: `toggle_hero:${h2.id}:uid:${uid}` });
+        row.push({ text: `${s2 ? '✅' : '⬜'} ${h2.template.name} ❤${hp2}%`, callback_data: `toggle_hero:${h2.id}:${uid}` });
       }
       buttons.push(row);
     }
