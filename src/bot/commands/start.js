@@ -1,5 +1,5 @@
 const { getOrCreatePlayer } = require('../../game/player');
-const { formatGold } = require('../../core/helpers');
+const { formatGold, reply } = require('../../core/helpers');
 const { mainMenu } = require('../keyboards');
 
 module.exports = function registerStart(bot) {
@@ -16,13 +16,12 @@ module.exports = function registerStart(bot) {
       msg += `💰 ${formatGold(player.gold)} Gold\n`;
       msg += `💎 ${player.gems} Gems\n`;
       msg += `━━━━━━━━━━━━━━━━\n\n`;
-      msg += `🎯 آماده‌ای برای نبرد حماسی؟\n`;
-      msg += `⚔️ قهرمان بخر، ارتش بساز، دشمنان رو شکست بده!`;
+      msg += `🎯 آماده‌ای برای نبرد حماسی؟`;
 
-      await ctx.reply(msg, { parse_mode: 'Markdown', ...mainMenu });
+      await reply(ctx, msg, { parse_mode: 'Markdown', ...mainMenu });
     } catch (e) {
       console.error('Start error:', e);
-      ctx.reply('⚠️ خطا: ' + e.message);
+      await reply(ctx, '⚠️ خطا: ' + e.message);
     }
   });
 
