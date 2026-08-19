@@ -1,35 +1,41 @@
-const { PlayerService } = require('../../game/player/PlayerService');
-const { getMainMenuKeyboard } = require('../keyboards/mainMenu');
-const logger = require('../../core/logger');
+const { getOrCreatePlayer } = require('../../game/player');
+const { formatGold } = require('../../core/helpers');
+const { mainMenu } = require('../keyboards');
 
-function registerStart(bot) {
+module.exports = function registerStart(bot) {
   bot.start(async (ctx) => {
     try {
-      const playerService = new PlayerService();
-      const player = await playerService.getOrCreate(ctx.from);
-
-      const welcomeMessage = `⚔️ **به EPWR خوش آمدی!**
-
-👑 فرمانده: ${player.commander_name}
-🏰 قلمرو: ${player.realm_name}
-⭐ سطح: ${player.level}
-
-💰 ${player.gold.toLocaleString()} Gold
-💎 ${player.gems} Gems
-
-آماده‌ای برای نبرد حماسی؟`;
-
-      await ctx.reply(welcomeMessage, {
-        parse_mode: 'Markdown',
-        ...getMainMenuKeyboard()
-      });
-
-      logger.info(`بازیکن شروع کرد: ${ctx.from.id}`);
-    } catch (error) {
-      logger.error('خطا در /start', error);
-      await ctx.reply('⚠️ خطایی رخ داد. لطفاً دوباره تلاش کن.');
+      const player = await getOrCreatePlayer(ctx.from);
+      await ctx.reply(
+        `⚔️ *به EPWR خوش آمدی!*\n\n` +
+        `👑 فرمانده: ${player.commander_name}\n` +
+        `🏰 قلمرو: ${player.realm_name}\n` +
+        `⭐ سطح: ${player.level}\n\n` +
+        `💰 ${formatGold(player.gold)} Gold\n` +
+        `💎 ${player.gems} Gems\n\n` +
+        `آماده‌ای برای نبرد حماسی؟`,
+        { parse_mode: 'Markdown', ...mainMenu }
+      );
+    } catch (e) {
+      console.error('Start error:', e);
+      ctx.reply('⚠️ خطا: ' + e.message);
     }
   });
-}
 
-module.exports = { registerStart };
+  bot.action('mainmenu', async (ctx) => {
+    await ctx.answerCbQuery();
+    const player = await getOrCreatePlayer(ctx.from);
+    await ctx.editMessageText(
+      `⚔️ *منوی اصلی*\n\n👑 ${player.commander_name}\n💰 ${formatGold(player.gold)} | 💎 ${player.gems}`,
+      { parse_mode: 'Markdown', ...mainMenu }
+    );
+  });
+
+  const placeholders = ['realm', 'army', 'world', 'resources', 'ranking', 'alliance', 'settings'];
+  placeholders.forEach(key => {
+    bot.action(key, async (ctx) => {
+      await ctx.answerCbQuery();
+      await ctx.reply(`🚧 این بخش به زودی اضافه می‌شود!`);
+    });
+  });
+};
