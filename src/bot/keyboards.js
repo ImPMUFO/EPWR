@@ -2,12 +2,12 @@ const mainMenu = {
   reply_markup: {
     inline_keyboard: [
       [
-        { text: '🏰 قلمرو', callback_data: 'realm' },
-        { text: '⚔️ ارتش', callback_data: 'army' }
+        { text: '⚔️ نبرد', callback_data: 'battle' },
+        { text: '🛒 فروشگاه', callback_data: 'shop' }
       ],
       [
         { text: '👥 قهرمانان', callback_data: 'myheroes' },
-        { text: '🛒 فروشگاه', callback_data: 'shop' }
+        { text: '🏰 قلمرو', callback_data: 'realm' }
       ],
       [
         { text: '🗺️ جهان', callback_data: 'world' },
