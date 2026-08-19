@@ -1,63 +1,40 @@
 const { getOrCreatePlayer } = require('../../game/player');
-const { formatGold } = require('../../core/helpers');
-const { mainMenu } = require('../keyboards');
+const { formatGold, cb } = require('../../core/helpers');
 
 module.exports = function registerSettings(bot) {
-
-  bot.action('settings', async (ctx) => {
+  bot.action(/settings:uid:(\d+)/, async (ctx) => {
     await ctx.answerCbQuery();
     const player = await getOrCreatePlayer(ctx.from);
+    const uid = ctx.from.id;
 
     let msg = `⚙️ *تنظیمات*\n\n`;
-    msg += `━━━━━━━━━━━━━━━━\n`;
-    msg += `👤 نام: ${ctx.from.first_name || 'Commander'}\n`;
-    msg += `🆔 آیدی: ${ctx.from.id}\n`;
-    msg += `📱 یوزرنیم: @${ctx.from.username || '---'}\n`;
-    msg += `━━━━━━━━━━━━━━━━\n\n`;
-    msg += `👑 فرمانده: ${player.commander_name}\n`;
-    msg += `🏰 قلمرو: ${player.realm_name}\n`;
-    msg += `⭐ سطح: ${player.level}\n`;
-    msg += `━━━━━━━━━━━━━━━━\n\n`;
-    msg += `🎮 *EPWR | نبرد حماسی*\n`;
-    msg += `⚔️ نسخه 1.0\n`;
-    msg += `📅 ساخته شده با ❤️`;
+    msg += `👤 ${ctx.from.first_name || 'Commander'}\n`;
+    msg += `🆔 ${ctx.from.id}\n`;
+    msg += `👑 ${player.commander_name}\n`;
+    msg += `🏰 ${player.realm_name}\n`;
+    msg += `⭐ Lv.${player.level}`;
 
     await ctx.editMessageText(msg, {
       parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '📊 پروفایل کامل', callback_data: 'profile' }],
-          [{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]
-        ]
-      }
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: cb('mainmenu', uid) }]] }
     });
   });
 
-  bot.action('profile', async (ctx) => {
+  bot.action(/profile:uid:(\d+)/, async (ctx) => {
     await ctx.answerCbQuery();
     const player = await getOrCreatePlayer(ctx.from);
+    const uid = ctx.from.id;
 
-    let msg = `👑 *پروفایل کامل*\n\n`;
-    msg += `🆔 آیدی: ${player.telegram_id}\n`;
-    msg += `👤 نام: ${player.commander_name}\n`;
-    msg += `🏰 قلمرو: ${player.realm_name}\n`;
-    msg += `⭐ سطح: ${player.level}\n`;
-    msg += `✨ تجربه: ${player.xp}\n\n`;
-    msg += `💰 Gold: ${formatGold(player.gold)}\n`;
-    msg += `💎 Gems: ${player.gems}\n`;
-    msg += `🍖 Food: ${formatGold(player.food)}\n`;
-    msg += `🪵 Wood: ${formatGold(player.wood)}\n`;
-    msg += `🪨 Stone: ${formatGold(player.stone)}\n`;
-    msg += `⚙️ Iron: ${formatGold(player.iron)}`;
+    let msg = `👑 *پروفایل*\n\n`;
+    msg += `🆔 ${player.telegram_id}\n`;
+    msg += `👤 ${player.commander_name}\n`;
+    msg += `🏰 ${player.realm_name}\n`;
+    msg += `⭐ Lv.${player.level} | ✨ ${player.xp}\n\n`;
+    msg += `💰 ${formatGold(player.gold)} | 💎 ${player.gems}`;
 
     await ctx.editMessageText(msg, {
       parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '⚙️ تنظیمات', callback_data: 'settings' }],
-          [{ text: '🔙 بازگشت', callback_data: 'mainmenu' }]
-        ]
-      }
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: cb('mainmenu', uid) }]] }
     });
   });
 };
