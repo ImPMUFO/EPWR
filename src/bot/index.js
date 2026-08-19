@@ -8,13 +8,9 @@ async function getBot() {
   botInstance = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
   botInstance.catch((err) => console.error('Bot error:', err));
 
-  // Middleware سریع و سبک
   botInstance.use(async (ctx, next) => {
     if (ctx.callbackQuery && !isOwner(ctx)) {
-      return ctx.answerCbQuery(
-        '⚠️ این منو برای شما نیست!\n/start بزنید.',
-        { show_alert: true }
-      );
+      return ctx.answerCbQuery('⚠️ این منو برای شما نیست! /start بزنید.', { show_alert: true });
     }
     return next();
   });
@@ -33,7 +29,6 @@ async function getBot() {
   require('./commands/quest')(botInstance);
   require('./commands/pvp')(botInstance);
 
-  console.log('Bot initialized');
   return botInstance;
 }
 
