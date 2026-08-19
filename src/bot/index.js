@@ -1,32 +1,21 @@
 const { Telegraf } = require('telegraf');
-const { validateEnv } = require('../core/env');
-const logger = require('../core/logger');
 
 let botInstance = null;
 
 async function getBot() {
   if (botInstance) return botInstance;
-
-  validateEnv();
-  
   botInstance = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-  
-  // Error handler
-  botInstance.catch((err, ctx) => {
-    logger.error(`خطا در ${ctx.updateType}`, err);
-    ctx.reply('⚠️ خطایی رخ داد. لطفاً بعداً تلاش کنید.');
-  });
+  botInstance.catch((err) => console.error('Bot error:', err));
 
-  // ثبت دستورات
-  const { registerStart } = require('./commands/start');
-  const { registerProfile } = require('./commands/profile');
-  const { registerHelp } = require('./commands/help');
+  const registerStart = require('./commands/start');
+  const registerProfile = require('./commands/profile');
+  const registerShop = require('./commands/shop');
 
   registerStart(botInstance);
   registerProfile(botInstance);
-  registerHelp(botInstance);
+  registerShop(botInstance);
 
-  logger.info('✅ Bot initialized');
+  console.log('Bot initialized');
   return botInstance;
 }
 
