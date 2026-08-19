@@ -1,5 +1,5 @@
 const { getSupabase } = require('../core/supabase');
-
+const { addPlayerXp, xpForActivity } = require('./xp');
 const battleSessions = new Map();
 
 function getSession(telegramId) {
