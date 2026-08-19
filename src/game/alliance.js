@@ -2,27 +2,15 @@ const { getSupabase } = require('../core/supabase');
 
 async function createAlliance(telegramId, name, tag, description) {
   const db = getSupabase();
-  
-  const { data: existing } = await db.from('alliance_members')
-    .select('alliance_id').eq('telegram_id', telegramId).maybeSingle();
-  if (existing) return { success: false, message: '❌ شما قبلاً عضو یک اتحاد هستید!' };
-
-  const { error } = await db.from('alliances').insert({
-    name, tag: tag.toUpperCase(), description, leader_id: telegramId
-  });
-
+  const { data: existing } = await db.from('alliance_members').select('alliance_id').eq('telegram_id', telegramId).maybeSingle();
+  if (existing) return { success: false, message: '❌ قبلاً عضو اتحاد هستید!' };
+  const { error } = await db.from('alliances').insert({ name, tag: tag.toUpperCase(), description, leader_id: telegramId });
   if (error) {
     if (error.code === '23505') return { success: false, message: '❌ این نام یا تگ قبلاً استفاده شده!' };
     return { success: false, message: '❌ خطا در ساخت اتحاد!' };
   }
-
-  const { data: alliance } = await db.from('alliances')
-    .select('*').eq('tag', tag.toUpperCase()).single();
-  
-  await db.from('alliance_members').insert({
-    alliance_id: alliance.id, telegram_id: telegramId, role: 'leader'
-  });
-
+  const { data: alliance } = await db.from('alliances').select('*').eq('tag', tag.toUpperCase()).single();
+  await db.from('alliance_members').insert({ alliance_id: alliance.id, telegram_id: telegramId, role: 'leader' });
   return { success: true, alliance };
 }
 
@@ -42,13 +30,9 @@ async function getAllAlliances() {
 
 async function requestJoin(telegramId, allianceId) {
   const db = getSupabase();
-  const { data: existing } = await db.from('alliance_members')
-    .select('alliance_id').eq('telegram_id', telegramId).maybeSingle();
+  const { data: existing } = await db.from('alliance_members').select('alliance_id').eq('telegram_id', telegramId).maybeSingle();
   if (existing) return { success: false, message: '❌ قبلاً عضو اتحاد هستید!' };
-
-  const { error } = await db.from('alliance_join_requests').insert({
-    alliance_id: allianceId, telegram_id: telegramId
-  });
+  const { error } = await db.from('alliance_join_requests').insert({ alliance_id: allianceId, telegram_id: telegramId });
   if (error) return { success: false, message: '❌ قبلاً درخواست داده‌اید!' };
   return { success: true };
 }
@@ -62,12 +46,4 @@ async function leaveAlliance(telegramId) {
   return { success: true };
 }
 
-async function getMembers(allianceId) {
-  const db = getSupabase();
-  const { data } = await db.from('alliance_members')
-    .select('telegram_id, role, player:players (commander_name, level)')
-    .eq('alliance_id', allianceId);
-  return data || [];
-}
-
-module.exports = { createAlliance, getPlayerAlliance, getAllAlliances, requestJoin, leaveAlliance, getMembers };
+module.exports = { createAlliance, getPlayerAlliance, getAllAlliances, requestJoin, leaveAlliance };
