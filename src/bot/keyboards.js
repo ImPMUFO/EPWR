@@ -7,10 +7,10 @@ const mainMenu = {
       ],
       [
         { text: '👥 قهرمانان', callback_data: 'myheroes' },
-        { text: '🏰 قلمرو', callback_data: 'realm' }
+        { text: '🗺️ جهان', callback_data: 'world' }
       ],
       [
-        { text: '🗺️ جهان', callback_data: 'world' },
+        { text: '🏰 قلمرو', callback_data: 'realm' },
         { text: '💰 منابع', callback_data: 'resources' }
       ],
       [
