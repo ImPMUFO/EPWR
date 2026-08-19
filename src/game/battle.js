@@ -1,5 +1,4 @@
 const { getSupabase } = require('../core/supabase');
-const { getCached, setCache, clearCache } = require('../core/helpers');
 
 const battleSessions = new Map();
 
@@ -8,8 +7,7 @@ function getSession(telegramId) {
     battleSessions.set(telegramId, { 
       selectedHeroes: [], 
       target: null, 
-      targetType: null,
-      ownerId: telegramId 
+      targetType: null 
     });
   }
   return battleSessions.get(telegramId);
@@ -20,46 +18,27 @@ function clearSession(telegramId) {
 }
 
 async function getPlayerHeroes(telegramId) {
-  const cacheKey = `heroes:${telegramId}`;
-  const cached = getCached(cacheKey, 30000);
-  if (cached) return cached;
-
   const db = getSupabase();
   const { data } = await db
     .from('player_characters')
     .select(`id, level, xp, current_health, template:character_templates (id, name, base_attack, base_defense, base_health, rarity)`)
     .eq('telegram_id', telegramId)
     .gt('current_health', 0);
-  
-  const result = data || [];
-  setCache(cacheKey, result);
-  return result;
+  return data || [];
 }
 
 async function getBotRealms() {
-  const cacheKey = 'bot_realms';
-  const cached = getCached(cacheKey, 300000);
-  if (cached) return cached;
-
   const db = getSupabase();
   const { data } = await db.from('bot_realms').select('*').order('difficulty');
-  const result = data || [];
-  setCache(cacheKey, result);
-  return result;
+  return data || [];
 }
 
 async function getDefeatedNPCs(telegramId) {
-  const cacheKey = `defeated:${telegramId}`;
-  const cached = getCached(cacheKey, 60000);
-  if (cached) return cached;
-
   const db = getSupabase();
   const { data } = await db.from('npc_defeated')
     .select('bot_realm_id')
     .eq('telegram_id', telegramId);
-  const result = (data || []).map(d => d.bot_realm_id);
-  setCache(cacheKey, result);
-  return result;
+  return (data || []).map(d => d.bot_realm_id);
 }
 
 function calcTeamPower(heroes) {
@@ -117,10 +96,6 @@ async function fightNPC(telegramId, botRealm, selectedHeroIds) {
       }
     }
   }
-
-  // پاک کردن cache بعد از جنگ
-  clearCache(`heroes:${telegramId}`);
-  clearCache(`defeated:${telegramId}`);
 
   return {
     success: true, playerWins, playerPower, botPower,
