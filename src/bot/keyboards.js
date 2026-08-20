@@ -26,7 +26,7 @@ function buildMainMenu(userId) {
         ],
         [
           { text: '🎁 کد هدیه', callback_data: cb('gift', userId) },
-          { text: '⚙️ تنظیمات', callback_data: cb('settings', userId) }
+          { text: '👑 پروفایل', callback_data: cb('profile', userId) }
         ]
       ]
     }
