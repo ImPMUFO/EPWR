@@ -1,5 +1,5 @@
 const { assignDailyQuests, getPlayerQuests, claimQuestReward } = require('../../game/quest');
-const { formatGold, reply, cb } = require('../../core/helpers');
+const { smartReply, cb } = require('../../core/helpers');
 
 module.exports = function registerQuest(bot) {
   bot.action(/^quest\|(\d+)$/, async (ctx) => {
@@ -27,6 +27,6 @@ module.exports = function registerQuest(bot) {
     });
     if (quests.length === 0) msg += '📭 مأموریتی نیست!';
     buttons.push([{ text: '🔙', callback_data: cb('mainmenu', uid) }]);
-    await reply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+    await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
 };
