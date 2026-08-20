@@ -8,26 +8,6 @@ module.exports = function registerAlliance(bot) {
   bot.command('alliance', async (ctx) => { await showAllianceMenu(ctx); });
   bot.action(/^alliance\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showAllianceMenu(ctx); });
 
-  // ═══ لیست همه اتحادها ═══
-  bot.action(/^alliance_list\|(\d+)$/, async (ctx) => {
-    await ctx.answerCbQuery();
-    const alliances = await getAllAlliances();
-    const uid = ctx.from.id;
-    if (alliances.length === 0) {
-      return ctx.editMessageText('🤝 اتحادی نیست! خودت بساز.', { reply_markup: { inline_keyboard: [[{ text: '➕ ساخت', callback_data: cb('alliance_create', uid) }], [{ text: '🔙', callback_data: cb('alliance', uid) }]] } });
-    }
-    let msg = '🤝 *اتحادها*\n\n';
-    const buttons = [];
-    alliances.forEach(a => {
-      const groupIcon = a.linked_group_id ? ' 🎏 گروه' : '';
-      msg += `⚜️ *${a.name}*${groupIcon}\n`;
-      msg += `   ⭐ Lv.${a.level} | 💰 ${formatGold(a.treasury_gold || 0)}\n\n`;
-      buttons.push([{ text: `⚜️ ${a.name}${groupIcon}`, callback_data: `alliance_view|${a.id}|${uid}` }]);
-    });
-    buttons.push([{ text: '🔙', callback_data: cb('alliance', uid) }]);
-    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
-  });
-
   // ═══ ۱۰ اتحاد برتر ═══
   bot.action(/^alliance_top\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
@@ -80,10 +60,39 @@ module.exports = function registerAlliance(bot) {
     const buttons = [];
     const playerAlliance = await getPlayerAlliance(uid);
     if (!playerAlliance) {
-      buttons.push([{ text: '📥 درخواست عضویت', callback_data: `alliance_join|${allianceId}|${uid}` }]);
+      buttons.push([{ text: '📥 عضویت در اتحاد', callback_data: `alliance_join_direct|${allianceId}|${uid}` }]);
     }
-    buttons.push([{ text: '🔙', callback_data: cb('alliance_list', uid) }]);
+    buttons.push([{ text: '🔙', callback_data: cb('alliance_top', uid) }]);
     await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+  });
+
+  // ═══ عضویت مستقیم در اتحاد ═══
+  bot.action(/^alliance_join_direct\|(.+)\|(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const allianceId = ctx.match[1];
+    const uid = ctx.from.id;
+    
+    const db = getSupabase();
+    
+    // چک عضو بودن فعلی
+    const { data: existing } = await db.from('alliance_members').select('alliance_id').eq('telegram_id', uid).maybeSingle();
+    if (existing) {
+      return ctx.answerCbQuery('❌ قبلاً عضو اتحاد هستید!', { show_alert: true });
+    }
+    
+    // چک ظرفیت اتحاد
+    const { data: alliance } = await db.from('alliances').select('*').eq('id', allianceId).single();
+    const members = await getAllianceMembers(allianceId);
+    const maxMembers = MAX_MEMBERS_PER_LEVEL[alliance.level] || 10;
+    if (members.length >= maxMembers) {
+      return ctx.answerCbQuery('❌ اتحاد پر است!', { show_alert: true });
+    }
+    
+    // عضویت مستقیم
+    await db.from('alliance_members').insert({ alliance_id: allianceId, telegram_id: uid, role: 'member' });
+    
+    await ctx.answerCbQuery(`✅ به اتحاد "${alliance.name}" پیوستی!`, { show_alert: true });
+    await showAllianceMenu(ctx);
   });
 
   // ═══ ساخت اتحاد ═══
@@ -125,13 +134,6 @@ module.exports = function registerAlliance(bot) {
         reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('alliance', ctx.from.id) }]] }
       }
     );
-  });
-
-  // ═══ درخواست عضویت ═══
-  bot.action(/^alliance_join\|(.+)\|(\d+)$/, async (ctx) => {
-    await ctx.answerCbQuery();
-    const result = await requestJoin(ctx.from.id, ctx.match[1]);
-    await ctx.answerCbQuery(result.success ? '✅ درخواست ارسال شد!' : result.message, { show_alert: true });
   });
 
   // ═══ ترک اتحاد ═══
@@ -380,7 +382,6 @@ module.exports = function registerAlliance(bot) {
       await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
         [{ text: '➕ ساخت اتحاد', callback_data: cb('alliance_create', uid) }],
         [{ text: '🏆 ۱۰ اتحاد برتر', callback_data: cb('alliance_top', uid) }],
-        [{ text: '📋 لیست اتحادها', callback_data: cb('alliance_list', uid) }],
         [{ text: '🔙', callback_data: cb('mainmenu', uid) }]
       ] } });
     }
