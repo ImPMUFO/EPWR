@@ -22,17 +22,18 @@ module.exports = function registerPvP(bot) {
     
     const target = targets[Math.floor(Math.random() * targets.length)];
     const uid = ctx.from.id;
+    const skipCost = target.level * 10;
     
     let msg = `👥 *جنگ PvP*\n\n`;
     msg += `🎯 حریف تصادفی:\n\n`;
     msg += `👤 *${target.commander_name}*\n`;
     msg += `⭐ Lv.${target.level}\n\n`;
     msg += `💡 حمله می‌کنی یا بازیکن بعدی؟\n\n`;
-    msg += `💰 اگه بازیکن بعدی رو بزنی، ${target.level * 10} سکه می‌گیری!`;
+    msg += `💰 هزینه بازیکن بعدی: ${skipCost} سکه`;
     
     const buttons = [
       [{ text: `⚔️ حمله به ${target.commander_name}`, callback_data: `pvp_target|${target.telegram_id}|${uid}` }],
-      [{ text: `🔄 بازیکن بعدی (+${target.level * 10}💰)`, callback_data: `pvp_next|${target.telegram_id}|${uid}` }],
+      [{ text: `🔄 بازیکن بعدی (-${skipCost}💰)`, callback_data: `pvp_next|${target.telegram_id}|${uid}` }],
       [{ text: '🔙 بازگشت', callback_data: cb('battle', uid) }]
     ];
     
@@ -45,22 +46,26 @@ module.exports = function registerPvP(bot) {
     const previousTargetId = parseInt(ctx.match[1]);
     const uid = ctx.from.id;
     
-    // پیدا کردن سطح بازیکن قبلی برای محاسبه پاداش
     const db = getSupabase();
     const { data: prevPlayer } = await db.from('players')
       .select('level')
       .eq('telegram_id', previousTargetId)
       .single();
     
-    const reward = prevPlayer ? prevPlayer.level * 10 : 20;
+    const skipCost = prevPlayer ? prevPlayer.level * 10 : 20;
     
-    // دادن پاداش
+    // چک کردن سکه کافی
     const { data: player } = await db.from('players').select('gold').eq('telegram_id', uid).single();
-    if (player) {
-      await db.from('players').update({ gold: player.gold + reward }).eq('telegram_id', uid);
+    if (!player) return ctx.answerCbQuery('❌ بازیکن پیدا نشد!', { show_alert: true });
+    
+    if (player.gold < skipCost) {
+      return ctx.answerCbQuery(`❌ سکه کافی نداری! نیاز: ${skipCost}`, { show_alert: true });
     }
     
-    await ctx.answerCbQuery(`💰 +${reward} سکه گرفتی!`, { show_alert: true });
+    // کسر سکه
+    await db.from('players').update({ gold: player.gold - skipCost }).eq('telegram_id', uid);
+    
+    await ctx.answerCbQuery(`💰 -${skipCost} سکه کسر شد!`, { show_alert: true });
     await showRandomOpponent(ctx);
   });
 
