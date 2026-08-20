@@ -1,23 +1,70 @@
 const { findPvPTargets, executePvP } = require('../../game/pvp');
 const { getPlayerHeroes, getSession, clearSession } = require('../../game/battle');
-const { smartReply, cb } = require('../../core/helpers');
+const { getSupabase } = require('../../core/supabase');
+const { formatGold, smartReply, cb } = require('../../core/helpers');
 
 module.exports = function registerPvP(bot) {
-  bot.action(/^pvp\|(\d+)$/, async (ctx) => {
+  
+  // ═══ ورود به PvP ═══
+  bot.action(/^battle_pvp\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
-    const targets = await findPvPTargets(ctx.from.id);
-    if (targets.length === 0) return ctx.answerCbQuery('👥 بازیکنی نیست!', { show_alert: true });
-    const uid = ctx.from.id;
-    let msg = '👥 *جنگ PvP*\n\n';
-    const buttons = [];
-    targets.forEach(t => {
-      msg += `👤 ${t.commander_name} Lv.${t.level}\n`;
-      buttons.push([{ text: `⚔️ ${t.commander_name}`, callback_data: `pvp_target|${t.telegram_id}|${uid}` }]);
-    });
-    buttons.push([{ text: '🔙', callback_data: cb('battle', uid) }]);
-    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+    await showRandomOpponent(ctx);
   });
 
+  // ═══ نمایش حریف تصادفی ═══
+  async function showRandomOpponent(ctx) {
+    const targets = await findPvPTargets(ctx.from.id);
+    if (targets.length === 0) {
+      return ctx.editMessageText('👥 بازیکنی برای جنگ نیست!', {
+        reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('battle', ctx.from.id) }]] }
+      });
+    }
+    
+    const target = targets[Math.floor(Math.random() * targets.length)];
+    const uid = ctx.from.id;
+    
+    let msg = `👥 *جنگ PvP*\n\n`;
+    msg += `🎯 حریف تصادفی:\n\n`;
+    msg += `👤 *${target.commander_name}*\n`;
+    msg += `⭐ Lv.${target.level}\n\n`;
+    msg += `💡 حمله می‌کنی یا بازیکن بعدی؟\n\n`;
+    msg += `💰 اگه بازیکن بعدی رو بزنی، ${target.level * 10} سکه می‌گیری!`;
+    
+    const buttons = [
+      [{ text: `⚔️ حمله به ${target.commander_name}`, callback_data: `pvp_target|${target.telegram_id}|${uid}` }],
+      [{ text: `🔄 بازیکن بعدی (+${target.level * 10}💰)`, callback_data: `pvp_next|${target.telegram_id}|${uid}` }],
+      [{ text: '🔙 بازگشت', callback_data: cb('battle', uid) }]
+    ];
+    
+    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+  }
+
+  // ═══ بازیکن بعدی ═══
+  bot.action(/^pvp_next\|(\d+)\|(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const previousTargetId = parseInt(ctx.match[1]);
+    const uid = ctx.from.id;
+    
+    // پیدا کردن سطح بازیکن قبلی برای محاسبه پاداش
+    const db = getSupabase();
+    const { data: prevPlayer } = await db.from('players')
+      .select('level')
+      .eq('telegram_id', previousTargetId)
+      .single();
+    
+    const reward = prevPlayer ? prevPlayer.level * 10 : 20;
+    
+    // دادن پاداش
+    const { data: player } = await db.from('players').select('gold').eq('telegram_id', uid).single();
+    if (player) {
+      await db.from('players').update({ gold: player.gold + reward }).eq('telegram_id', uid);
+    }
+    
+    await ctx.answerCbQuery(`💰 +${reward} سکه گرفتی!`, { show_alert: true });
+    await showRandomOpponent(ctx);
+  });
+
+  // ═══ انتخاب حریف ═══
   bot.action(/^pvp_target\|(\d+)\|(\d+)$/, async (ctx) => {
     const session = getSession(ctx.from.id);
     session.target = parseInt(ctx.match[1]);
@@ -27,6 +74,7 @@ module.exports = function registerPvP(bot) {
     await showHeroSelectionPvP(ctx);
   });
 
+  // ═══ انتخاب قهرمان PvP ═══
   bot.action(/^toggle_hero_pvp\|(.+)\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const session = getSession(ctx.from.id);
@@ -37,6 +85,7 @@ module.exports = function registerPvP(bot) {
     await showHeroSelectionPvP(ctx);
   });
 
+  // ═══ تأیید حمله PvP ═══
   bot.action(/^pvp_confirm\|(\d+)$/, async (ctx) => {
     const session = getSession(ctx.from.id);
     if (session.selectedHeroes.length === 0) return ctx.answerCbQuery('⚠️ قهرمان انتخاب کن!', { show_alert: true });
@@ -44,6 +93,7 @@ module.exports = function registerPvP(bot) {
     const result = await executePvP(ctx.from.id, session.target, session.selectedHeroes);
     clearSession(ctx.from.id);
     if (!result.success) return ctx.answerCbQuery(result.message, { show_alert: true });
+    
     try {
       if (result.attackerWins) {
         await ctx.telegram.sendMessage(session.target,
@@ -59,17 +109,19 @@ module.exports = function registerPvP(bot) {
     } catch(e) {
       console.error('Send message error:', e.message);
     }
+    
     let msg = result.attackerWins ? '🏆 *پیروزی!*\n' : '💀 *شکست!*\n';
     msg += `⚡ تو: ${result.attackerPower} | حریف: ${result.defenderPower}\n`;
     if (result.attackerWins && result.goldStolen > 0) msg += `💰 +${result.goldStolen}`;
-    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '⚔️ دوباره', callback_data: cb('battle', ctx.from.id) }], [{ text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]] } });
+    
+    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '⚔️ دوباره', callback_data: cb('battle_pvp', ctx.from.id) }], [{ text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]] } });
   });
 
   async function showHeroSelectionPvP(ctx) {
     const heroes = await getPlayerHeroes(ctx.from.id);
     const session = getSession(ctx.from.id);
     const uid = ctx.from.id;
-    let msg = '🎯 *انتخاب قهرمان (PvP)*\n\n';
+    let msg = `🎯 *انتخاب قهرمان (PvP)*\n\n`;
     const buttons = [];
     for (let i = 0; i < heroes.length; i += 2) {
       const row = [];
@@ -83,7 +135,7 @@ module.exports = function registerPvP(bot) {
       }
       buttons.push(row);
     }
-    buttons.push([{ text: `⚔️ حمله (${session.selectedHeroes.length})`, callback_data: cb('pvp_confirm', uid) }, { text: '🔙', callback_data: cb('pvp', uid) }]);
+    buttons.push([{ text: `⚔️ حمله (${session.selectedHeroes.length})`, callback_data: cb('pvp_confirm', uid) }, { text: '🔙', callback_data: cb('battle_pvp', uid) }]);
     await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
 };
