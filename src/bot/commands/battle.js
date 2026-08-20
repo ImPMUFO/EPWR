@@ -1,5 +1,5 @@
 const { getSession, clearSession, getPlayerHeroes, getBotRealms, getDefeatedNPCs, calcTeamPower, fightNPC } = require('../../game/battle');
-const { reply, cb } = require('../../core/helpers');
+const { smartReply, cb } = require('../../core/helpers');
 
 module.exports = function registerBattle(bot) {
   bot.command('battle', async (ctx) => { await showBattleMenu(ctx); });
@@ -55,7 +55,7 @@ module.exports = function registerBattle(bot) {
     });
     buttons.push([{ text: '👥 PvP', callback_data: cb('pvp', uid) }, { text: '🗺️ جهان', callback_data: cb('world', uid) }]);
     buttons.push([{ text: '🔙', callback_data: cb('mainmenu', uid) }]);
-    await reply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+    await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
 
   async function showHeroSelection(ctx) {
