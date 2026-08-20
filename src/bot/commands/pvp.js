@@ -1,6 +1,6 @@
 const { findPvPTargets, executePvP } = require('../../game/pvp');
 const { getPlayerHeroes, getSession, clearSession } = require('../../game/battle');
-const { formatGold, reply, cb } = require('../../core/helpers');
+const { smartReply, cb } = require('../../core/helpers');
 
 module.exports = function registerPvP(bot) {
   bot.action(/^pvp\|(\d+)$/, async (ctx) => {
@@ -15,7 +15,7 @@ module.exports = function registerPvP(bot) {
       buttons.push([{ text: `⚔️ ${t.commander_name}`, callback_data: `pvp_target|${t.telegram_id}|${uid}` }]);
     });
     buttons.push([{ text: '🔙', callback_data: cb('battle', uid) }]);
-    await reply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   });
 
   bot.action(/^pvp_target\|(\d+)\|(\d+)$/, async (ctx) => {
@@ -44,24 +44,21 @@ module.exports = function registerPvP(bot) {
     const result = await executePvP(ctx.from.id, session.target, session.selectedHeroes);
     clearSession(ctx.from.id);
     if (!result.success) return ctx.answerCbQuery(result.message, { show_alert: true });
-
-    // فرستادن پیام به مدافع
     try {
       if (result.attackerWins) {
         await ctx.telegram.sendMessage(session.target,
-          `⚔️ *حمله به شما!*\n\n👤 *${ctx.from.first_name || 'فرمانده'}* به قلمرو شما حمله کرد!\n💰 ${result.goldStolen} Gold دزدیده شد!\n\nبرای دفاع، قهرمان‌های قوی‌تر بخر!`,
+          `⚔️ *حمله به شما!*\n\n👤 *${ctx.from.first_name || 'فرمانده'}* به قلمرو شما حمله کرد!\n💰 ${result.goldStolen} Gold دزدیده شد!`,
           { parse_mode: 'Markdown' }
         );
       } else {
         await ctx.telegram.sendMessage(session.target,
-          `🛡️ *دفاع موفق!*\n\nشما حمله *${ctx.from.first_name || 'فرمانده'}* را دفع کردید!\nقلمرو شما امن است. ✅`,
+          `🛡️ *دفاع موفق!*\n\nشما حمله *${ctx.from.first_name || 'فرمانده'}* را دفع کردید!`,
           { parse_mode: 'Markdown' }
         );
       }
     } catch(e) {
       console.error('Send message error:', e.message);
     }
-
     let msg = result.attackerWins ? '🏆 *پیروزی!*\n' : '💀 *شکست!*\n';
     msg += `⚡ تو: ${result.attackerPower} | حریف: ${result.defenderPower}\n`;
     if (result.attackerWins && result.goldStolen > 0) msg += `💰 +${result.goldStolen}`;
