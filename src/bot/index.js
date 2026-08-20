@@ -8,7 +8,6 @@ async function getBot() {
   botInstance = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
   botInstance.catch((err) => console.error('Bot error:', err));
 
-  // ═══ Middleware: محافظت از منو ═══
   botInstance.use(async (ctx, next) => {
     if (ctx.callbackQuery) {
       if (!isOwner(ctx)) {
@@ -24,7 +23,7 @@ async function getBot() {
   const commands = [
     'start', 'shop', 'battle', 'realm', 'world', 'ranking',
     'settings', 'gift', 'admin', 'pvp', 'alliance', 'quest',
-    'profile', 'notifications'
+    'profile', 'notifications', 'buildings', 'guide'
   ];
 
   commands.forEach(cmd => {
