@@ -12,11 +12,17 @@ module.exports = function registerAlliance(bot) {
   bot.action(/^alliance_top\|(\d+)$/, async (ctx) => {
     try {
       await ctx.answerCbQuery();
-      const alliances = await getTopAlliances(10);
       const uid = ctx.from.id;
       
+      let alliances = [];
+      try {
+        alliances = await getTopAlliances(10);
+      } catch(e) {
+        console.error('getTopAlliances error:', e.message);
+      }
+      
       if (!alliances || alliances.length === 0) {
-        return ctx.editMessageText('🤝 اتحادی نیست!\n\nخودت یه اتحاد بساز.', { 
+        return await smartReply(ctx, '🤝 اتحادی نیست!\n\nخودت یه اتحاد بساز.', { 
           parse_mode: 'Markdown',
           reply_markup: { inline_keyboard: [
             [{ text: '➕ ساخت اتحاد', callback_data: cb('alliance_create', uid) }],
@@ -48,12 +54,17 @@ module.exports = function registerAlliance(bot) {
       });
       
       buttons.push([{ text: '🔙', callback_data: cb('alliance', uid) }]);
-      await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+      
+      await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
     } catch(e) {
       console.error('alliance_top error:', e.message);
-      await ctx.editMessageText('⚠️ خطا در بارگذاری اتحادها\n\nدوباره تلاش کن.', { 
-        reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('alliance', ctx.from.id) }]] } 
-      });
+      try {
+        await smartReply(ctx, '⚠️ خطا در بارگذاری اتحادها\n\nدوباره تلاش کن.', { 
+          reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('alliance', ctx.from.id) }]] } 
+        });
+      } catch(e2) {
+        await ctx.reply('⚠️ خطا در بارگذاری اتحادها');
+      }
     }
   });
 
@@ -100,7 +111,8 @@ module.exports = function registerAlliance(bot) {
         buttons.push([{ text: '📥 عضویت در اتحاد', callback_data: `alliance_join_direct|${allianceId}|${uid}` }]);
       }
       buttons.push([{ text: '🔙', callback_data: cb('alliance_top', uid) }]);
-      await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+      
+      await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
     } catch(e) {
       console.error('alliance_view error:', e.message);
       await ctx.answerCbQuery('⚠️ خطا', { show_alert: true });
@@ -146,7 +158,7 @@ module.exports = function registerAlliance(bot) {
   bot.action(/^alliance_create\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     allianceState.set(ctx.from.id, { step: 'name', data: {} });
-    await ctx.editMessageText('⚜️ *ساخت اتحاد*\n\n📝 *مرحله ۱ از ۳*\n\nنام اتحاد رو تایپ کن:', {
+    await smartReply(ctx, '⚜️ *ساخت اتحاد*\n\n📝 *مرحله ۱ از ۳*\n\nنام اتحاد رو تایپ کن:', {
       parse_mode: 'Markdown',
       reply_markup: { inline_keyboard: [[{ text: '❌', callback_data: cb('alliance', ctx.from.id) }]] }
     });
@@ -156,7 +168,7 @@ module.exports = function registerAlliance(bot) {
   bot.action(/^alliance_rename\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     allianceState.set(ctx.from.id, { step: 'rename', data: {} });
-    await ctx.editMessageText('✏️ *تغییر نام اتحاد*\n\nنام جدید رو تایپ کن:', {
+    await smartReply(ctx, '✏️ *تغییر نام اتحاد*\n\nنام جدید رو تایپ کن:', {
       reply_markup: { inline_keyboard: [[{ text: '❌', callback_data: cb('alliance', ctx.from.id) }]] }
     });
   });
@@ -171,7 +183,7 @@ module.exports = function registerAlliance(bot) {
     const botUsername = ctx.botInfo.username;
     const inviteLink = `https://t.me/${botUsername}?start=alliance_${inviteCode}`;
     
-    await ctx.editMessageText(
+    await smartReply(ctx,
       `🔗 *لینک دعوت اتحاد*\n\n` +
       `⚜️ ${member.alliance.name}\n\n` +
       `📋 *لینک:*\n\`${inviteLink}\`\n\n` +
@@ -198,7 +210,7 @@ module.exports = function registerAlliance(bot) {
     if (!member) return ctx.answerCbQuery('❌ عضو اتحاد نیستی!', { show_alert: true });
     if (member.role !== 'leader') return ctx.answerCbQuery('❌ فقط رهبر می‌تواند اتحاد را حذف کند!', { show_alert: true });
     
-    await ctx.editMessageText(
+    await smartReply(ctx,
       `⚠️ *حذف اتحاد*\n\n` +
       `اتحاد *${member.alliance.name}* حذف خواهد شد.\n\n` +
       `❌ این عمل *قابل بازگشت نیست!*\n` +
@@ -233,7 +245,7 @@ module.exports = function registerAlliance(bot) {
   bot.action(/^alliance_deposit\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     allianceState.set(ctx.from.id, { step: 'deposit', data: {} });
-    await ctx.editMessageText('💰 *واریز به خزانه*\n\nچقدر سکه واریز می‌کنی؟', {
+    await smartReply(ctx, '💰 *واریز به خزانه*\n\nچقدر سکه واریز می‌کنی؟', {
       reply_markup: { inline_keyboard: [[{ text: '❌', callback_data: cb('alliance', ctx.from.id) }]] }
     });
   });
@@ -261,7 +273,7 @@ module.exports = function registerAlliance(bot) {
       msg += `${roleIcon} ${m.players?.commander_name || 'Unknown'} Lv.${m.players?.level || 1}\n`;
     });
     
-    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('alliance', ctx.from.id) }]] } });
+    await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('alliance', ctx.from.id) }]] } });
   });
 
   // ═══ جنگ اتحادها ═══
@@ -284,7 +296,7 @@ module.exports = function registerAlliance(bot) {
       buttons.push([{ text: `⚔️ ${a.name}`, callback_data: `alliance_attack|${a.id}|${uid}` }]);
     });
     buttons.push([{ text: '🔙', callback_data: cb('alliance', uid) }]);
-    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+    await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   });
 
   // ═══ حمله به اتحاد ═══
@@ -307,7 +319,7 @@ module.exports = function registerAlliance(bot) {
       msg += `\n💰 ${result.goldStolen} سکه دزدیدی!`;
     }
 
-    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('alliance', ctx.from.id) }]] } });
+    await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('alliance', ctx.from.id) }]] } });
   });
 
   // ═══ تاریخچه جنگ‌ها ═══
@@ -333,7 +345,7 @@ module.exports = function registerAlliance(bot) {
       }
     }
 
-    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('alliance', ctx.from.id) }]] } });
+    await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('alliance', ctx.from.id) }]] } });
   });
 
   // ═══ دریافت متن ═══
@@ -434,7 +446,9 @@ module.exports = function registerAlliance(bot) {
       }
     } catch(e) {
       console.error('showAllianceMenu error:', e.message);
-      await ctx.reply('⚠️ خطا در بارگذاری منوی اتحاد');
+      try {
+        await ctx.reply('⚠️ خطا در بارگذاری منوی اتحاد');
+      } catch(e2) {}
     }
   }
 };
