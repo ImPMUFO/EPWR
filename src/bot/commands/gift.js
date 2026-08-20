@@ -1,5 +1,5 @@
 const { redeemGiftCode } = require('../../game/gift');
-const { formatGold, reply, cb } = require('../../core/helpers');
+const { formatGold, smartReply, cb } = require('../../core/helpers');
 
 const giftState = new Map();
 
@@ -27,6 +27,6 @@ module.exports = function registerGift(bot) {
 
   async function showGiftMenu(ctx) {
     giftState.delete(ctx.from.id);
-    await reply(ctx, '🎁 *کد هدیه*\n\nکد داری؟ واردش کن!', { reply_markup: { inline_keyboard: [[{ text: '📝 وارد کردن کد', callback_data: cb('gift_enter_code', ctx.from.id) }], [{ text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]] } });
+    await smartReply(ctx, '🎁 *کد هدیه*\n\nکد داری؟ واردش کن!', { reply_markup: { inline_keyboard: [[{ text: '📝 وارد کردن کد', callback_data: cb('gift_enter_code', ctx.from.id) }], [{ text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]] } });
   }
 };
