@@ -103,8 +103,32 @@ async function leaveAlliance(telegramId) {
   const db = getSupabase();
   const member = await getPlayerAlliance(telegramId);
   if (!member) return { success: false, message: '❌ عضو اتحاد نیستید!' };
-  if (member.role === 'leader') return { success: false, message: '❌ رهبر نمی‌تواند اتحاد را ترک کند! اول رهبری رو منتقل کن.' };
+  
+  // همه می‌تونن ترک کنن، حتی مدیر تنها
   await db.from('alliance_members').delete().eq('telegram_id', telegramId);
+  return { success: true };
+}
+
+async function deleteAlliance(telegramId) {
+  const db = getSupabase();
+  const member = await getPlayerAlliance(telegramId);
+  if (!member) return { success: false, message: '❌ عضو اتحاد نیستید!' };
+  if (member.role !== 'leader') return { success: false, message: '❌ فقط رهبر می‌تواند اتحاد را حذف کند!' };
+  
+  const allianceId = member.alliance.id;
+  
+  // حذف اعضا
+  await db.from('alliance_members').delete().eq('alliance_id', allianceId);
+  
+  // حذف درخواست‌های عضویت
+  await db.from('alliance_join_requests').delete().eq('alliance_id', allianceId);
+  
+  // حذف جنگ‌ها
+  await db.from('alliance_wars').delete().or(`attacker_alliance_id.eq.${allianceId},defender_alliance_id.eq.${allianceId}`);
+  
+  // حذف اتحاد
+  await db.from('alliances').delete().eq('id', allianceId);
+  
   return { success: true };
 }
 
@@ -177,6 +201,7 @@ async function getAllianceWars(allianceId) {
 module.exports = {
   createAlliance, getPlayerAlliance, getAllianceByGroupId, getAllianceByInviteCode,
   joinAllianceByInvite, getAllAlliances, getTopAlliances, getAllianceMembers,
-  renameAlliance, requestJoin, leaveAlliance, depositToTreasury, upgradeAlliance,
-  startAllianceWar, getAllianceWars, MAX_MEMBERS_PER_LEVEL, WAR_POWER_PER_LEVEL, DAILY_REWARD_PER_LEVEL
+  renameAlliance, requestJoin, leaveAlliance, deleteAlliance, depositToTreasury,
+  upgradeAlliance, startAllianceWar, getAllianceWars, MAX_MEMBERS_PER_LEVEL,
+  WAR_POWER_PER_LEVEL, DAILY_REWARD_PER_LEVEL
 };
