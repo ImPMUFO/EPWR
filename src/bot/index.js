@@ -22,26 +22,64 @@ async function getBot() {
     return next();
   });
 
-  // ═══ ذخیره گروه وقتی ربات اضافه میشه ═══
+  // ═══ ذخیره گروه و تبدیل خودکار به اتحاد ═══
   botInstance.on('new_chat_members', async (ctx) => {
     const newMembers = ctx.message.new_chat_members;
     const isBotAdded = newMembers.some(m => m.is_bot);
     if (isBotAdded) {
       try {
         const db = getSupabase();
+        
+        // ذخیره گروه
         await db.from('bot_groups').upsert({
           group_id: ctx.chat.id,
           group_name: ctx.chat.title
         });
+        
+        // ساخت اتحاد برای گروه
+        const { data: existingAlliance } = await db.from('alliances')
+          .select('id')
+          .eq('linked_group_id', ctx.chat.id)
+          .maybeSingle();
+        
+        if (!existingAlliance) {
+          const ownerId = ctx.chat.owner_id || ctx.from.id;
+          const allianceName = ctx.chat.title || 'اتحاد گروه';
+          const allianceTag = (ctx.chat.title || 'GRP').replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toUpperCase() || 'GRP';
+          
+          await db.from('alliances').insert({
+            name: allianceName,
+            tag: allianceTag,
+            description: 'اتحاد ساخته شده از گروه تلگرام',
+            leader_id: ownerId,
+            linked_group_id: ctx.chat.id,
+            linked_group_name: ctx.chat.title
+          });
+          
+          const { data: alliance } = await db.from('alliances')
+            .select('*')
+            .eq('linked_group_id', ctx.chat.id)
+            .single();
+          
+          if (alliance) {
+            await db.from('alliance_members').insert({
+              alliance_id: alliance.id,
+              telegram_id: ownerId,
+              role: 'leader'
+            });
+            
+            await ctx.reply(`🎏 *اتحاد "${alliance.name}" ساخته شد!*\n\n👑 رهبر: مالک گروه\n\nبرای مدیریت اتحاد، /alliance بزنید.`, { parse_mode: 'Markdown' });
+          }
+        }
       } catch(e) {
-        console.error('Group save error:', e.message);
+        console.error('Group to alliance error:', e.message);
       }
     }
   });
 
-  // ═══ ذخیره گروه‌های فعلی (هر پیام گروه) ═══
+  // ═══ ذخیره گروه‌های فعلی ═══
   botInstance.use(async (ctx, next) => {
-    if (ctx.chat && ctx.chat.type === 'group' || ctx.chat && ctx.chat.type === 'supergroup') {
+    if (ctx.chat && (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup')) {
       try {
         const db = getSupabase();
         await db.from('bot_groups').upsert({
