@@ -8,9 +8,15 @@ async function getBot() {
   botInstance = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
   botInstance.catch((err) => console.error('Bot error:', err));
 
+  // ═══ Middleware: محافظت از منو ═══
   botInstance.use(async (ctx, next) => {
-    if (ctx.callbackQuery && !isOwner(ctx)) {
-      return ctx.answerCbQuery('⚠️ این منو برای شما نیست! /start بزنید.', { show_alert: true });
+    if (ctx.callbackQuery) {
+      if (!isOwner(ctx)) {
+        return ctx.answerCbQuery(
+          '⚠️ این منو برای شما نیست!\nلطفاً /start بزنید و منوی خودتان را بسازید.',
+          { show_alert: true }
+        );
+      }
     }
     return next();
   });
