@@ -33,11 +33,26 @@ async function getBot() {
           group_id: ctx.chat.id,
           group_name: ctx.chat.title
         });
-        console.log(`✅ گروه ذخیره شد: ${ctx.chat.title}`);
       } catch(e) {
         console.error('Group save error:', e.message);
       }
     }
+  });
+
+  // ═══ ذخیره گروه‌های فعلی (هر پیام گروه) ═══
+  botInstance.use(async (ctx, next) => {
+    if (ctx.chat && ctx.chat.type === 'group' || ctx.chat && ctx.chat.type === 'supergroup') {
+      try {
+        const db = getSupabase();
+        await db.from('bot_groups').upsert({
+          group_id: ctx.chat.id,
+          group_name: ctx.chat.title
+        });
+      } catch(e) {
+        // ignore
+      }
+    }
+    return next();
   });
 
   const commands = [
