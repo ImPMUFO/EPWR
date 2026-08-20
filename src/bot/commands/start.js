@@ -1,5 +1,6 @@
 const { getOrCreatePlayer } = require('../../game/player');
 const { processFoodConsumption } = require('../../game/food');
+const { processKitchenProduction } = require('../../game/buildings');
 const { formatGold, reply, cb } = require('../../core/helpers');
 const { buildMainMenu } = require('../keyboards');
 
@@ -7,6 +8,7 @@ module.exports = function registerStart(bot) {
   bot.start(async (ctx) => {
     try {
       const player = await getOrCreatePlayer(ctx.from);
+      await processKitchenProduction(ctx.from.id);
       await processFoodConsumption(ctx.from.id);
 
       const xpToNext = player.xp_to_next || 100;
