@@ -1,4 +1,5 @@
 const { getSupabase } = require('../core/supabase');
+const { updateQuestProgress } = require('./quest');
 
 async function getAllCharacters() {
   const db = getSupabase();
@@ -40,6 +41,8 @@ async function purchaseCharacter(telegramId, player, template) {
     telegram_id: telegramId, template_id: template.id,
     level: 1, current_health: template.base_health, xp: 0, is_equipped: false
   });
+  // ═══ آپدیت مأموریت‌ها ═══
+  await updateQuestProgress(telegramId, 'buy_hero');
   return { success: true };
 }
 
