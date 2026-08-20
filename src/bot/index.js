@@ -92,7 +92,7 @@ async function getBot() {
   });
 
   const commands = [
-    'start', 'shop', 'battle', 'realm', 'world', 'ranking',
+    'start', 'shop', 'battle', 'realm', 'ranking',
     'settings', 'gift', 'admin', 'pvp', 'alliance', 'quest',
     'profile', 'notifications', 'buildings', 'guide'
   ];
@@ -105,7 +105,7 @@ async function getBot() {
     }
   });
 
-  // ═══ تنظیم دکمه‌های ثابت پایین چت ═══
+  // ═══ تنظیم دستورات ═══
   botInstance.telegram.setMyCommands([
     { command: 'start', description: 'شروع بازی و منوی اصلی' },
     { command: 'battle', description: 'جنگ با سرزمین‌ها' },
