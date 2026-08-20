@@ -8,24 +8,36 @@ module.exports = function registerAlliance(bot) {
   bot.command('alliance', async (ctx) => { await showAllianceMenu(ctx); });
   bot.action(/^alliance\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showAllianceMenu(ctx); });
 
-  // ═══ ۱۰ اتحاد برتر ═══
+  // ═══ ۱۰ اتحاد برتر با دکمه عضویت ═══
   bot.action(/^alliance_top\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const alliances = await getTopAlliances(10);
     const uid = ctx.from.id;
+    const playerAlliance = await getPlayerAlliance(uid);
+    
     if (alliances.length === 0) {
       return ctx.editMessageText('🤝 اتحادی نیست!', { reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('alliance', uid) }]] } });
     }
+    
     let msg = '🏆 *۱۰ اتحاد برتر*\n\n';
     const medals = ['🥇', '🥈', '🥉'];
     const buttons = [];
+    
     alliances.forEach((a, i) => {
       const groupIcon = a.linked_group_id ? ' 🎏' : '';
       const medal = i < 3 ? medals[i] : `${i + 1}.`;
       msg += `${medal} *${a.name}*${groupIcon}\n`;
       msg += `   ⭐ Lv.${a.level} | 💰 ${formatGold(a.treasury_gold || 0)}\n\n`;
+      
+      // دکمه مشاهده
       buttons.push([{ text: `${medal} ${a.name}`, callback_data: `alliance_view|${a.id}|${uid}` }]);
+      
+      // دکمه عضویت فقط اگه عضو اتحاد نباشه
+      if (!playerAlliance) {
+        buttons.push([{ text: `📥 عضویت در ${a.name}`, callback_data: `alliance_join_direct|${a.id}|${uid}` }]);
+      }
     });
+    
     buttons.push([{ text: '🔙', callback_data: cb('alliance', uid) }]);
     await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   });
