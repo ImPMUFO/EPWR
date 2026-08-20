@@ -15,16 +15,15 @@ async function getBot() {
     return next();
   });
 
-  // همه دستورات
   const commands = [
     'start', 'shop', 'battle', 'realm', 'world', 'ranking',
-    'settings', 'gift', 'admin', 'pvp', 'alliance', 'quest', 'profile'
+    'settings', 'gift', 'admin', 'pvp', 'alliance', 'quest',
+    'profile', 'notifications'
   ];
 
   commands.forEach(cmd => {
     try {
       require(`./commands/${cmd}`)(botInstance);
-      console.log(`✅ ${cmd} loaded`);
     } catch(e) {
       console.error(`❌ ${cmd} error:`, e.message);
     }
