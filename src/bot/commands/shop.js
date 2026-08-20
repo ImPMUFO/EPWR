@@ -18,7 +18,8 @@ module.exports = function registerShop(bot) {
     if (!template) return ctx.answerCbQuery('❌ پیدا نشد', { show_alert: true });
     const player = await getOrCreatePlayer(ctx.from);
     const result = await purchaseCharacter(ctx.from.id, player, template);
-    await ctx.answerCbQuery(result.success ? `✅ ${template.name}!` : result.message, { show_alert: true });
+    await ctx.answerCbQuery(result.success ? `✅ ${template.name} خریداری شد!` : result.message, { show_alert: true });
+    if (result.success) await showShop(ctx, 1);
   });
 
   bot.action(/^buy_item\|(\d+)\|(\d+)$/, async (ctx) => {
@@ -26,7 +27,11 @@ module.exports = function registerShop(bot) {
     if (!item) return ctx.answerCbQuery('❌ پیدا نشد', { show_alert: true });
     const player = await getOrCreatePlayer(ctx.from);
     const result = await purchaseItem(ctx.from.id, player, item);
-    await ctx.answerCbQuery(result.success ? `✅ ${item.name}!` : result.message, { show_alert: true });
+    await ctx.answerCbQuery(result.success ? `✅ ${item.name} خریداری شد!` : result.message, { show_alert: true });
+    if (result.success) {
+      const page = item.type === 'resource' ? 3 : 2;
+      await showShop(ctx, page);
+    }
   });
 
   bot.action(/^myheroes\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showMyHeroes(ctx); });
@@ -74,19 +79,21 @@ module.exports = function registerShop(bot) {
     const totalPages = 3;
 
     if (page === 1) {
-      msg += `🎭 *قهرمانان* (صفحه 1/${totalPages})\n\n`;
+      msg += `🎭 *قهرمانان* (1/3)\n\n`;
       for (let i = 0; i < chars.length; i += 2) {
         const row = [];
         const c1 = chars[i];
-        row.push({ text: `${rarityEmoji(c1.rarity)} ${c1.name} 💰${c1.price_gold || c1.price_gems}`, callback_data: `buy_char|${c1.id}|${uid}` });
+        const price1 = c1.price_gold > 0 ? `💰${c1.price_gold}` : `💎${c1.price_gems}`;
+        row.push({ text: `${rarityEmoji(c1.rarity)} ${c1.name} ${price1}`, callback_data: `buy_char|${c1.id}|${uid}` });
         if (i + 1 < chars.length) {
           const c2 = chars[i + 1];
-          row.push({ text: `${rarityEmoji(c2.rarity)} ${c2.name} 💰${c2.price_gold || c2.price_gems}`, callback_data: `buy_char|${c2.id}|${uid}` });
+          const price2 = c2.price_gold > 0 ? `💰${c2.price_gold}` : `💎${c2.price_gems}`;
+          row.push({ text: `${rarityEmoji(c2.rarity)} ${c2.name} ${price2}`, callback_data: `buy_char|${c2.id}|${uid}` });
         }
         buttons.push(row);
       }
     } else if (page === 2) {
-      msg += `🎁 *آیتم‌ها و معجون‌ها* (صفحه 2/${totalPages})\n\n`;
+      msg += `🎁 *آیتم‌ها و معجون‌ها* (2/3)\n\n`;
       const potions = items.filter(i => i.type === 'potion');
       for (let i = 0; i < potions.length; i += 2) {
         const row = [];
@@ -97,7 +104,7 @@ module.exports = function registerShop(bot) {
         buttons.push(row);
       }
     } else if (page === 3) {
-      msg += `📦 *منابع* (صفحه 3/${totalPages})\n\n`;
+      msg += `📦 *منابع* (3/3)\n\n`;
       const resources = items.filter(i => i.type === 'resource');
       for (let i = 0; i < resources.length; i += 2) {
         const row = [];
@@ -108,13 +115,12 @@ module.exports = function registerShop(bot) {
         buttons.push(row);
       }
       msg += `\n💡 *راهنمای منابع:*\n`;
-      msg += `🪵 چوب: برای ساختمان‌ها\n`;
-      msg += `🪨 سنگ: برای قلعه و برج\n`;
-      msg += `⚙️ آهن: برای آهنگری\n`;
-      msg += `🍖 غذا: برای قهرمان‌ها`;
+      msg += `🪵 چوب → برای ساختمان‌ها\n`;
+      msg += `🪨 سنگ → قلعه و برج\n`;
+      msg += `⚙️ آهن → آهنگری\n`;
+      msg += `🍖 غذا → قهرمان‌ها`;
     }
 
-    // دکمه‌های ناوبری
     const navRow = [];
     if (page > 1) navRow.push({ text: '◀️ قبلی', callback_data: `shop_page|${page - 1}|${uid}` });
     navRow.push({ text: `${page}/${totalPages}`, callback_data: `shop_page|${page}|${uid}` });
