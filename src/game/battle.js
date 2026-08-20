@@ -83,3 +83,9 @@ async function fightNPC(telegramId, botRealm, selectedHeroIds) {
 }
 
 module.exports = { getSession, clearSession, getPlayerHeroes, getBotRealms, getDefeatedNPCs, calcTeamPower, fightNPC };
+// ═══ XP برای بازیکن ═══
+  if (playerWins) {
+    await addPlayerXp(telegramId, xpForActivity('battle_win'));
+  } else {
+    await addPlayerXp(telegramId, xpForActivity('battle_lose'));
+  }
