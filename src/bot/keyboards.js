@@ -10,10 +10,10 @@ function buildMainMenu(userId) {
         ],
         [
           { text: '👥 قهرمانان', callback_data: cb('myheroes', userId) },
-          { text: '🗺️ جهان', callback_data: cb('world', userId) }
+          { text: '🏗️ ساختمان‌ها', callback_data: cb('buildings', userId) }
         ],
         [
-          { text: '🏰 قلمرو', callback_data: cb('realm', userId) },
+          { text: '🗺️ جهان', callback_data: cb('world', userId) },
           { text: '💰 منابع', callback_data: cb('resources', userId) }
         ],
         [
@@ -26,7 +26,7 @@ function buildMainMenu(userId) {
         ],
         [
           { text: '🎁 کد هدیه', callback_data: cb('gift', userId) },
-          { text: '👑 پروفایل', callback_data: cb('profile', userId) }
+          { text: '📚 راهنما', callback_data: cb('guide', userId) }
         ]
       ]
     }
