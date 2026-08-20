@@ -1,5 +1,6 @@
 const { getSupabase } = require('../core/supabase');
 const { addPlayerXp, xpForActivity } = require('./xp');
+const { updateQuestProgress } = require('./quest');
 
 const battleSessions = new Map();
 
@@ -69,6 +70,8 @@ async function fightNPC(telegramId, botRealm, selectedHeroIds) {
       await db.from('player_characters').update({ current_health: newHp, xp: finalXp, level: newLevel }).eq('id', hero.id);
     }
     await addPlayerXp(telegramId, xpForActivity('battle_win'));
+    // ═══ آپدیت مأموریت‌ها ═══
+    await updateQuestProgress(telegramId, 'battle_win');
   } else {
     for (const hero of selected) {
       const damage = Math.floor(botPower / selected.length) + Math.floor(Math.random() * 15);
