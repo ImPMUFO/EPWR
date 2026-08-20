@@ -28,12 +28,10 @@ module.exports = function registerShop(bot) {
     const player = await getOrCreatePlayer(ctx.from);
     const result = await purchaseItem(ctx.from.id, player, item);
     await ctx.answerCbQuery(result.success ? `✅ ${item.name} خریداری شد!` : result.message, { show_alert: true });
-    if (result.success) {
-      const page = item.type === 'resource' ? 3 : 2;
-      await showShop(ctx, page);
-    }
+    if (result.success) await showShop(ctx, 2);
   });
 
+  bot.command('myheroes', async (ctx) => { await showMyHeroes(ctx); });
   bot.action(/^myheroes\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showMyHeroes(ctx); });
 
   bot.action(/^hero\|(.+)\|(\d+)$/, async (ctx) => {
@@ -47,7 +45,10 @@ module.exports = function registerShop(bot) {
     if (hero.current_health < t.base_health * hero.level) {
       buttons.push([{ text: '🧪 معجون', callback_data: `use_potion|${hero.id}|${ctx.from.id}` }]);
     }
-    buttons.push([{ text: '👥 قهرمانان', callback_data: cb('myheroes', ctx.from.id) }, { text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]);
+    buttons.push([
+      { text: '👥 قهرمانان', callback_data: cb('myheroes', ctx.from.id) },
+      { text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }
+    ]);
     await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   });
 
@@ -63,7 +64,10 @@ module.exports = function registerShop(bot) {
     if (items.length === 0) return ctx.answerCbQuery('📦 آیتمی نداری!', { show_alert: true });
     let msg = '📦 *آیتم‌ها*\n\n';
     items.forEach(i => msg += `• ${i.item.name} ${i.is_active ? '⚡' : ''}\n`);
-    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]] } });
+    await ctx.editMessageText(msg, {
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]] }
+    });
   });
 
   async function showShop(ctx, page = 1) {
@@ -76,10 +80,10 @@ module.exports = function registerShop(bot) {
     msg += `🪵 ${player.wood || 0} | 🪨 ${player.stone || 0} | ⚙️ ${player.iron || 0} | 🍖 ${player.food || 0}\n\n`;
 
     const buttons = [];
-    const totalPages = 3;
+    const totalPages = 2;
 
     if (page === 1) {
-      msg += `🎭 *قهرمانان* (1/3)\n\n`;
+      msg += `🎭 *قهرمانان* (1/2)\n\n`;
       for (let i = 0; i < chars.length; i += 2) {
         const row = [];
         const c1 = chars[i];
@@ -93,24 +97,13 @@ module.exports = function registerShop(bot) {
         buttons.push(row);
       }
     } else if (page === 2) {
-      msg += `🎁 *آیتم‌ها و معجون‌ها* (2/3)\n\n`;
-      const potions = items.filter(i => i.type === 'potion');
-      for (let i = 0; i < potions.length; i += 2) {
+      msg += `📦 *منابع و دستگاه‌ها* (2/2)\n\n`;
+      const usable = items.filter(i => i.type === 'resource' || i.type === 'generator');
+      for (let i = 0; i < usable.length; i += 2) {
         const row = [];
-        row.push({ text: `${potions[i].name} 💰${potions[i].price_gold}`, callback_data: `buy_item|${potions[i].id}|${uid}` });
-        if (i + 1 < potions.length) {
-          row.push({ text: `${potions[i + 1].name} 💰${potions[i + 1].price_gold}`, callback_data: `buy_item|${potions[i + 1].id}|${uid}` });
-        }
-        buttons.push(row);
-      }
-    } else if (page === 3) {
-      msg += `📦 *منابع* (3/3)\n\n`;
-      const resources = items.filter(i => i.type === 'resource');
-      for (let i = 0; i < resources.length; i += 2) {
-        const row = [];
-        row.push({ text: `${resources[i].name} 💰${resources[i].price_gold}`, callback_data: `buy_item|${resources[i].id}|${uid}` });
-        if (i + 1 < resources.length) {
-          row.push({ text: `${resources[i + 1].name} 💰${resources[i + 1].price_gold}`, callback_data: `buy_item|${resources[i + 1].id}|${uid}` });
+        row.push({ text: `${usable[i].name} 💰${usable[i].price_gold}`, callback_data: `buy_item|${usable[i].id}|${uid}` });
+        if (i + 1 < usable.length) {
+          row.push({ text: `${usable[i + 1].name} 💰${usable[i + 1].price_gold}`, callback_data: `buy_item|${usable[i + 1].id}|${uid}` });
         }
         buttons.push(row);
       }
@@ -154,7 +147,10 @@ module.exports = function registerShop(bot) {
       }
       buttons.push(row);
     }
-    buttons.push([{ text: '🛒 فروشگاه', callback_data: cb('shop', uid) }, { text: '🔙', callback_data: cb('mainmenu', uid) }]);
+    buttons.push([
+      { text: '🛒 فروشگاه', callback_data: cb('shop', uid) },
+      { text: '🔙', callback_data: cb('mainmenu', uid) }
+    ]);
     await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
 };
