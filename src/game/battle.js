@@ -1,5 +1,6 @@
 const { getSupabase } = require('../core/supabase');
 const { addPlayerXp, xpForActivity } = require('./xp');
+
 const battleSessions = new Map();
 
 function getSession(telegramId) {
@@ -67,6 +68,7 @@ async function fightNPC(telegramId, botRealm, selectedHeroIds) {
       const newHp = Math.max(1, hero.current_health - damage);
       await db.from('player_characters').update({ current_health: newHp, xp: finalXp, level: newLevel }).eq('id', hero.id);
     }
+    await addPlayerXp(telegramId, xpForActivity('battle_win'));
   } else {
     for (const hero of selected) {
       const damage = Math.floor(botPower / selected.length) + Math.floor(Math.random() * 15);
@@ -78,14 +80,9 @@ async function fightNPC(telegramId, botRealm, selectedHeroIds) {
         await db.from('player_characters').update({ current_health: newHp }).eq('id', hero.id);
       }
     }
+    await addPlayerXp(telegramId, xpForActivity('battle_lose'));
   }
   return { success: true, playerWins, playerPower, botPower, goldReward: playerWins ? goldReward : 0, botRealm, selectedHeroes: selected, deadHeroes };
 }
 
 module.exports = { getSession, clearSession, getPlayerHeroes, getBotRealms, getDefeatedNPCs, calcTeamPower, fightNPC };
-// ═══ XP برای بازیکن ═══
-  if (playerWins) {
-    await addPlayerXp(telegramId, xpForActivity('battle_win'));
-  } else {
-    await addPlayerXp(telegramId, xpForActivity('battle_lose'));
-  }
