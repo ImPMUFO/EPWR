@@ -30,13 +30,11 @@ async function getBot() {
       try {
         const db = getSupabase();
         
-        // ذخیره گروه
         await db.from('bot_groups').upsert({
           group_id: ctx.chat.id,
           group_name: ctx.chat.title
         });
         
-        // ساخت اتحاد برای گروه
         const { data: existingAlliance } = await db.from('alliances')
           .select('id')
           .eq('linked_group_id', ctx.chat.id)
@@ -106,6 +104,18 @@ async function getBot() {
       console.error(`❌ ${cmd} error:`, e.message);
     }
   });
+
+  // ═══ تنظیم دکمه‌های ثابت پایین چت ═══
+  botInstance.telegram.setMyCommands([
+    { command: 'start', description: 'شروع بازی و منوی اصلی' },
+    { command: 'battle', description: 'جنگ با سرزمین‌ها' },
+    { command: 'shop', description: 'فروشگاه' },
+    { command: 'alliance', description: 'اتحاد' },
+    { command: 'ranking', description: 'رتبه‌بندی' },
+    { command: 'guide', description: 'راهنمای بازی' },
+    { command: 'gift', description: 'کد هدیه' },
+    { command: 'notifications', description: 'اعلان‌ها' }
+  ]).catch(e => console.error('setMyCommands error:', e.message));
 
   console.log('✅ Bot initialized');
   return botInstance;
