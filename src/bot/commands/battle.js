@@ -84,4 +84,5 @@ module.exports = function registerBattle(bot) {
     buttons.push([{ text: `⚔️ حمله (${session.selectedHeroes.length})`, callback_data: cb('confirm_attack', uid) }, { text: '🔙', callback_data: cb('battle', uid) }]);
     await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
+module.exports.showBattleMenu = showBattleMenu;
 };
