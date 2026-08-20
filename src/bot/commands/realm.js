@@ -1,7 +1,7 @@
 const { getOrCreatePlayer } = require('../../game/player');
 const { collectGold } = require('../../game/realm');
 const { getSupabase } = require('../../core/supabase');
-const { formatGold, cb } = require('../../core/helpers');
+const { formatGold, smartReply, cb } = require('../../core/helpers');
 
 module.exports = function registerRealm(bot) {
   bot.action(/^realm\|(\d+)$/, async (ctx) => {
