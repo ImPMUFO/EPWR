@@ -9,9 +9,12 @@ async function createAlliance(telegramId, name, tag, description, linkedGroupId 
   const { data: existing } = await db.from('alliance_members').select('alliance_id').eq('telegram_id', telegramId).maybeSingle();
   if (existing && !linkedGroupId) return { success: false, message: '❌ قبلاً عضو اتحاد هستید!' };
   
+  const inviteCode = Math.random().toString(36).substring(2, 10);
+  
   const { error } = await db.from('alliances').insert({
     name, tag: tag.toUpperCase(), description, leader_id: telegramId,
-    linked_group_id: linkedGroupId, linked_group_name: linkedGroupName
+    linked_group_id: linkedGroupId, linked_group_name: linkedGroupName,
+    invite_code: inviteCode
   });
   if (error) {
     if (error.code === '23505') return { success: false, message: '❌ این نام یا تگ قبلاً استفاده شده!' };
@@ -25,7 +28,7 @@ async function createAlliance(telegramId, name, tag, description, linkedGroupId 
 async function getPlayerAlliance(telegramId) {
   const db = getSupabase();
   const { data } = await db.from('alliance_members')
-    .select('alliance:alliances (id, name, tag, leader_id, treasury_gold, level, xp, xp_to_next, linked_group_id, linked_group_name), role')
+    .select('alliance:alliances (id, name, tag, leader_id, treasury_gold, level, xp, xp_to_next, linked_group_id, linked_group_name, invite_code), role')
     .eq('telegram_id', telegramId).maybeSingle();
   return data;
 }
@@ -36,9 +39,37 @@ async function getAllianceByGroupId(groupId) {
   return data;
 }
 
+async function getAllianceByInviteCode(inviteCode) {
+  const db = getSupabase();
+  const { data } = await db.from('alliances').select('*').eq('invite_code', inviteCode).maybeSingle();
+  return data;
+}
+
+async function joinAllianceByInvite(telegramId, inviteCode) {
+  const db = getSupabase();
+  const alliance = await getAllianceByInviteCode(inviteCode);
+  if (!alliance) return { success: false, message: '❌ کد دعوت نامعتبره!' };
+  
+  const { data: existing } = await db.from('alliance_members').select('alliance_id').eq('telegram_id', telegramId).maybeSingle();
+  if (existing) return { success: false, message: '❌ قبلاً عضو اتحاد هستید!' };
+  
+  await db.from('alliance_members').insert({ alliance_id: alliance.id, telegram_id: telegramId, role: 'member' });
+  return { success: true, alliance };
+}
+
 async function getAllAlliances() {
   const db = getSupabase();
   const { data } = await db.from('alliances').select('*').order('level', { ascending: false });
+  return data || [];
+}
+
+async function getTopAlliances(limit = 10) {
+  const db = getSupabase();
+  const { data } = await db.from('alliances')
+    .select('*')
+    .order('level', { ascending: false })
+    .order('treasury_gold', { ascending: false })
+    .limit(limit);
   return data || [];
 }
 
@@ -55,7 +86,6 @@ async function renameAlliance(telegramId, newName) {
   const member = await getPlayerAlliance(telegramId);
   if (!member) return { success: false, message: '❌ عضو اتحاد نیستید!' };
   if (member.role !== 'leader') return { success: false, message: '❌ فقط رهبر می‌تواند تغییر نام دهد!' };
-  
   await db.from('alliances').update({ name: newName }).eq('id', member.alliance.id);
   return { success: true };
 }
@@ -144,23 +174,9 @@ async function getAllianceWars(allianceId) {
   return data || [];
 }
 
-async function updateGroupOwner(groupId) {
-  const db = getSupabase();
-  const alliance = await getAllianceByGroupId(groupId);
-  if (!alliance) return;
-  
-  try {
-    const chatInfo = await db.from('bot_groups').select('*').eq('group_id', groupId).single();
-    // اینجا باید مالک جدید رو از Telegram API بگیری
-    // ولی برای سادگی، فعلاً تغییر نمیدیم
-  } catch(e) {
-    // ignore
-  }
-}
-
 module.exports = {
-  createAlliance, getPlayerAlliance, getAllianceByGroupId, getAllAlliances,
-  getAllianceMembers, renameAlliance, requestJoin, leaveAlliance,
-  depositToTreasury, upgradeAlliance, startAllianceWar, getAllianceWars,
-  updateGroupOwner, MAX_MEMBERS_PER_LEVEL, WAR_POWER_PER_LEVEL, DAILY_REWARD_PER_LEVEL
+  createAlliance, getPlayerAlliance, getAllianceByGroupId, getAllianceByInviteCode,
+  joinAllianceByInvite, getAllAlliances, getTopAlliances, getAllianceMembers,
+  renameAlliance, requestJoin, leaveAlliance, depositToTreasury, upgradeAlliance,
+  startAllianceWar, getAllianceWars, MAX_MEMBERS_PER_LEVEL, WAR_POWER_PER_LEVEL, DAILY_REWARD_PER_LEVEL
 };
