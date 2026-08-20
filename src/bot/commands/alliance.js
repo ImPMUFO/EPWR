@@ -1,5 +1,5 @@
 const { createAlliance, getPlayerAlliance, getAllAlliances, requestJoin, leaveAlliance } = require('../../game/alliance');
-const { reply, cb } = require('../../core/helpers');
+const { smartReply, cb } = require('../../core/helpers');
 
 const allianceState = new Map();
 
@@ -58,9 +58,9 @@ module.exports = function registerAlliance(bot) {
     const member = await getPlayerAlliance(ctx.from.id);
     const uid = ctx.from.id;
     if (member) {
-      await ctx.reply(`🤝 *${member.alliance.name}*\n👑 ${member.role}`, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🚪 ترک', callback_data: cb('alliance_leave', uid) }], [{ text: '🔙', callback_data: cb('mainmenu', uid) }]] } });
+      await smartReply(ctx, `🤝 *${member.alliance.name}*\n👑 ${member.role}`, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🚪 ترک', callback_data: cb('alliance_leave', uid) }], [{ text: '🔙', callback_data: cb('mainmenu', uid) }]] } });
     } else {
-      await ctx.reply('🤝 *اتحاد*\n\nعضو نیستی!', { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '➕ ساخت', callback_data: cb('alliance_create', uid) }], [{ text: '📋 لیست', callback_data: cb('alliance_list', uid) }], [{ text: '🔙', callback_data: cb('mainmenu', uid) }]] } });
+      await smartReply(ctx, '🤝 *اتحاد*\n\nعضو نیستی!', { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '➕ ساخت', callback_data: cb('alliance_create', uid) }], [{ text: '📋 لیست', callback_data: cb('alliance_list', uid) }], [{ text: '🔙', callback_data: cb('mainmenu', uid) }]] } });
     }
   }
 };
