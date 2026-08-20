@@ -1,5 +1,4 @@
-const { BUILDINGS, getBuildings, buildBuilding, hasBuilding } = require('../../game/buildings');
-const { buyFood } = require('../../game/food');
+const { BUILDINGS, getBuildings, getBuilding, buildBuilding, upgradeBuilding, processKitchenProduction, getResName } = require('../../game/buildings');
 const { getOrCreatePlayer } = require('../../game/player');
 const { formatGold, smartReply, cb } = require('../../core/helpers');
 
@@ -14,10 +13,10 @@ module.exports = function registerBuildings(bot) {
     if (result.success) await showBuildings(ctx);
   });
 
-  bot.action(/^buy_food\|(\d+)\|(\d+)$/, async (ctx) => {
-    const amount = parseInt(ctx.match[1]);
-    const result = await buyFood(ctx.from.id, amount);
-    await ctx.answerCbQuery(result.success ? `✅ ${amount} غذا خریدی!` : result.message, { show_alert: true });
+  bot.action(/^upgrade\|(.+)\|(\d+)$/, async (ctx) => {
+    const type = ctx.match[1];
+    const result = await upgradeBuilding(ctx.from.id, type);
+    await ctx.answerCbQuery(result.success ? `✅ ارتقا به سطح ${result.newLevel}!` : result.message, { show_alert: true });
     if (result.success) await showBuildings(ctx);
   });
 
@@ -28,45 +27,40 @@ module.exports = function registerBuildings(bot) {
 
     let msg = `🏗️ *ساختمان‌ها*\n\n`;
     msg += `💰 ${formatGold(player.gold)} | 🪵 ${player.wood || 0} | 🪨 ${player.stone || 0} | ⚙️ ${player.iron || 0}\n`;
-    msg += `🍖 غذا: ${player.food || 0}/${player.food_capacity || 1000}\n\n`;
+    msg += `🍖 ${player.food || 0}/${player.food_capacity || 1000}\n\n`;
 
     const buttons = [];
-    const builtTypes = buildings.map(b => b.type);
+    const builtMap = {};
+    buildings.forEach(b => builtMap[b.type] = b.level);
 
-    // دکمه‌های ساختمان
     for (const [key, b] of Object.entries(BUILDINGS)) {
-      const built = builtTypes.includes(key);
-      if (!built) {
-        const costStr = Object.entries(b.cost).map(([r, a]) => `${a} ${getResIcon(r)}`).join(' + ');
+      const level = builtMap[key] || 0;
+      if (level === 0) {
+        const costStr = Object.entries(b.base_cost).map(([r, a]) => `${a} ${getResIcon(r)}`).join(' + ');
         msg += `${b.name}\n   📖 ${b.desc}\n   💵 ${costStr}\n\n`;
         buttons.push([{ text: `🔨 ساخت ${b.name}`, callback_data: `build|${key}|${uid}` }]);
-      }
-    }
-
-    // دکمه خرید غذا
-    msg += `🍖 *خرید غذا* (هر واحد = 1 Gold)\n`;
-    buttons.push([
-      { text: '🍖 +100 (💰100)', callback_data: `buy_food|100|${uid}` },
-      { text: '🍖 +500 (💰500)', callback_data: `buy_food|500|${uid}` }
-    ]);
-
-    if (buttons.length > 2) {
-      // دکمه‌ها رو دوتا-دوتا کنار هم بذار
-      const newButtons = [];
-      for (let i = 0; i < buttons.length - 2; i += 2) {
-        if (i + 1 < buttons.length - 2) {
-          newButtons.push([buttons[i][0], buttons[i + 1][0]]);
+      } else {
+        const isMax = level >= b.max_level;
+        msg += `${b.name} *Lv.${level}*\n   📖 ${b.desc}\n`;
+        if (!isMax) {
+          const upgradeCost = Object.entries(b.base_cost).map(([r, a]) => `${Math.floor(a * (1 + level * 0.5))} ${getResIcon(r)}`).join(' + ');
+          msg += `   ⬆️ ارتقا: ${upgradeCost}\n\n`;
+          buttons.push([{ text: `⬆️ ارتقا ${b.name} (Lv.${level}→${level + 1})`, callback_data: `upgrade|${key}|${uid}` }]);
         } else {
-          newButtons.push([buttons[i][0]]);
+          msg += `   🏆 حداکثر سطح!\n\n`;
         }
       }
-      newButtons.push(buttons[buttons.length - 2]);
-      newButtons.push([{ text: '🔙 بازگشت', callback_data: cb('mainmenu', uid) }]);
-      await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: newButtons } });
-    } else {
-      buttons.push([{ text: '🔙 بازگشت', callback_data: cb('mainmenu', uid) }]);
-      await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
     }
+
+    msg += `\n💡 *راهنمای منابع:*\n`;
+    msg += `🪵 چوب: از فروشگاه منابع\n`;
+    msg += `🪨 سنگ: از فروشگاه منابع\n`;
+    msg += `⚙️ آهن: از فروشگاه منابع\n`;
+    msg += `💰 سکه: از جنگ و دستگاه‌ها`;
+
+    buttons.push([{ text: '🔙 بازگشت', callback_data: cb('mainmenu', uid) }]);
+
+    await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
 
   function getResIcon(res) {
