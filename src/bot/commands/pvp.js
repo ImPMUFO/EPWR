@@ -42,31 +42,26 @@ module.exports = function registerPvP(bot) {
     if (session.selectedHeroes.length === 0) return ctx.answerCbQuery('⚠️ قهرمان انتخاب کن!', { show_alert: true });
     await ctx.answerCbQuery();
     const result = await executePvP(ctx.from.id, session.target, session.selectedHeroes);
-// ═══ فرستادن پیام به مدافع ═══
-  if (result.success) {
+    clearSession(ctx.from.id);
+    if (!result.success) return ctx.answerCbQuery(result.message, { show_alert: true });
+
+    // فرستادن پیام به مدافع
     try {
       if (result.attackerWins) {
         await ctx.telegram.sendMessage(session.target,
-          `⚔️ *حمله به شما!*\n\n` +
-          `👤 *${ctx.from.first_name || 'فرمانده'}* به قلمرو شما حمله کرد!\n` +
-          `💰 ${result.goldStolen} Gold دزدیده شد!\n\n` +
-          `برای دفاع، قهرمان‌های قوی‌تر بخر!`,
+          `⚔️ *حمله به شما!*\n\n👤 *${ctx.from.first_name || 'فرمانده'}* به قلمرو شما حمله کرد!\n💰 ${result.goldStolen} Gold دزدیده شد!\n\nبرای دفاع، قهرمان‌های قوی‌تر بخر!`,
           { parse_mode: 'Markdown' }
         );
       } else {
         await ctx.telegram.sendMessage(session.target,
-          `🛡️ *دفاع موفق!*\n\n` +
-          `شما حمله *${ctx.from.first_name || 'فرمانده'}* را دفع کردید!\n` +
-          `قلمرو شما امن است. ✅`,
+          `🛡️ *دفاع موفق!*\n\nشما حمله *${ctx.from.first_name || 'فرمانده'}* را دفع کردید!\nقلمرو شما امن است. ✅`,
           { parse_mode: 'Markdown' }
         );
       }
     } catch(e) {
       console.error('Send message error:', e.message);
     }
-  }
-    clearSession(ctx.from.id);
-    if (!result.success) return ctx.answerCbQuery(result.message, { show_alert: true });
+
     let msg = result.attackerWins ? '🏆 *پیروزی!*\n' : '💀 *شکست!*\n';
     msg += `⚡ تو: ${result.attackerPower} | حریف: ${result.defenderPower}\n`;
     if (result.attackerWins && result.goldStolen > 0) msg += `💰 +${result.goldStolen}`;
