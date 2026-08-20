@@ -48,10 +48,31 @@ async function purchaseItem(telegramId, player, item) {
   if (item.price_gold > 0 && player.gold < item.price_gold) {
     return { success: false, message: `❌ Gold کافی نداری! نیاز: ${item.price_gold}` };
   }
-  await db.from('players').update({ gold: player.gold - item.price_gold }).eq('telegram_id', telegramId);
-  await db.from('player_items').insert({
-    telegram_id: telegramId, item_id: item.id, is_active: item.type === 'generator'
-  });
+
+  const updates = { gold: player.gold - item.price_gold };
+
+  // ═══ اگه منبع هست، مستقیم به دارایی اضافه کن ═══
+  if (item.type === 'resource') {
+    if (item.name.includes('چوب')) {
+      updates.wood = (player.wood || 0) + item.effect_value;
+    } else if (item.name.includes('سنگ')) {
+      updates.stone = (player.stone || 0) + item.effect_value;
+    } else if (item.name.includes('آهن')) {
+      updates.iron = (player.iron || 0) + item.effect_value;
+    } else if (item.name.includes('غذا')) {
+      updates.food = Math.min((player.food || 0) + item.effect_value, player.food_capacity || 1000);
+    }
+  }
+
+  await db.from('players').update(updates).eq('telegram_id', telegramId);
+
+  // فقط آیتم‌های غیر منبع رو به لیست آیتم‌ها اضافه کن
+  if (item.type !== 'resource') {
+    await db.from('player_items').insert({
+      telegram_id: telegramId, item_id: item.id, is_active: item.type === 'generator'
+    });
+  }
+
   return { success: true };
 }
 
