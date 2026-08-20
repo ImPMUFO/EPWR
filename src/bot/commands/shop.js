@@ -7,6 +7,12 @@ module.exports = function registerShop(bot) {
   bot.command('shop', async (ctx) => { await showShop(ctx); });
   bot.action(/^shop\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showShop(ctx); });
 
+  bot.action(/^shop_page\|(\d+)\|(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const page = parseInt(ctx.match[1]);
+    await showShop(ctx, page);
+  });
+
   bot.action(/^buy_char\|(\d+)\|(\d+)$/, async (ctx) => {
     const template = await getCharacterById(parseInt(ctx.match[1]));
     if (!template) return ctx.answerCbQuery('❌ پیدا نشد', { show_alert: true });
@@ -23,7 +29,6 @@ module.exports = function registerShop(bot) {
     await ctx.answerCbQuery(result.success ? `✅ ${item.name}!` : result.message, { show_alert: true });
   });
 
-  bot.command('myheroes', async (ctx) => { await showMyHeroes(ctx); });
   bot.action(/^myheroes\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showMyHeroes(ctx); });
 
   bot.action(/^hero\|(.+)\|(\d+)$/, async (ctx) => {
@@ -56,15 +61,20 @@ module.exports = function registerShop(bot) {
     await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]] } });
   });
 
-  async function showShop(ctx) {
+  async function showShop(ctx, page = 1) {
     const player = await getOrCreatePlayer(ctx.from);
     const chars = await getAllCharacters();
     const items = await getAllItems();
     const uid = ctx.from.id;
-    let msg = `🛒 *فروشگاه*\n💰 ${formatGold(player.gold)} | 💎 ${player.gems}\n\n`;
+
+    let msg = `🛒 *فروشگاه*\n💰 ${formatGold(player.gold)} | 💎 ${player.gems}\n`;
+    msg += `🪵 ${player.wood || 0} | 🪨 ${player.stone || 0} | ⚙️ ${player.iron || 0} | 🍖 ${player.food || 0}\n\n`;
+
     const buttons = [];
-    if (chars.length > 0) {
-      msg += '🎭 *قهرمانان*\n';
+    const totalPages = 3;
+
+    if (page === 1) {
+      msg += `🎭 *قهرمانان* (صفحه 1/${totalPages})\n\n`;
       for (let i = 0; i < chars.length; i += 2) {
         const row = [];
         const c1 = chars[i];
@@ -75,19 +85,48 @@ module.exports = function registerShop(bot) {
         }
         buttons.push(row);
       }
-      msg += '\n';
-    }
-    if (items.length > 0) {
-      msg += '🎁 *آیتم‌ها*\n';
-      for (let i = 0; i < items.length; i += 2) {
+    } else if (page === 2) {
+      msg += `🎁 *آیتم‌ها و معجون‌ها* (صفحه 2/${totalPages})\n\n`;
+      const potions = items.filter(i => i.type === 'potion');
+      for (let i = 0; i < potions.length; i += 2) {
         const row = [];
-        row.push({ text: `📦 ${items[i].name} 💰${items[i].price_gold}`, callback_data: `buy_item|${items[i].id}|${uid}` });
-        if (i + 1 < items.length) row.push({ text: `📦 ${items[i+1].name} 💰${items[i+1].price_gold}`, callback_data: `buy_item|${items[i+1].id}|${uid}` });
+        row.push({ text: `${potions[i].name} 💰${potions[i].price_gold}`, callback_data: `buy_item|${potions[i].id}|${uid}` });
+        if (i + 1 < potions.length) {
+          row.push({ text: `${potions[i + 1].name} 💰${potions[i + 1].price_gold}`, callback_data: `buy_item|${potions[i + 1].id}|${uid}` });
+        }
         buttons.push(row);
       }
+    } else if (page === 3) {
+      msg += `📦 *منابع* (صفحه 3/${totalPages})\n\n`;
+      const resources = items.filter(i => i.type === 'resource');
+      for (let i = 0; i < resources.length; i += 2) {
+        const row = [];
+        row.push({ text: `${resources[i].name} 💰${resources[i].price_gold}`, callback_data: `buy_item|${resources[i].id}|${uid}` });
+        if (i + 1 < resources.length) {
+          row.push({ text: `${resources[i + 1].name} 💰${resources[i + 1].price_gold}`, callback_data: `buy_item|${resources[i + 1].id}|${uid}` });
+        }
+        buttons.push(row);
+      }
+      msg += `\n💡 *راهنمای منابع:*\n`;
+      msg += `🪵 چوب: برای ساختمان‌ها\n`;
+      msg += `🪨 سنگ: برای قلعه و برج\n`;
+      msg += `⚙️ آهن: برای آهنگری\n`;
+      msg += `🍖 غذا: برای قهرمان‌ها`;
     }
-    buttons.push([{ text: '👥 قهرمانان من', callback_data: cb('myheroes', uid) }, { text: '📦 آیتم‌ها', callback_data: cb('myitems', uid) }]);
+
+    // دکمه‌های ناوبری
+    const navRow = [];
+    if (page > 1) navRow.push({ text: '◀️ قبلی', callback_data: `shop_page|${page - 1}|${uid}` });
+    navRow.push({ text: `${page}/${totalPages}`, callback_data: `shop_page|${page}|${uid}` });
+    if (page < totalPages) navRow.push({ text: 'بعدی ▶️', callback_data: `shop_page|${page + 1}|${uid}` });
+    buttons.push(navRow);
+
+    buttons.push([
+      { text: '👥 قهرمانان من', callback_data: cb('myheroes', uid) },
+      { text: '📦 آیتم‌های من', callback_data: cb('myitems', uid) }
+    ]);
     buttons.push([{ text: '🔙 بازگشت', callback_data: cb('mainmenu', uid) }]);
+
     await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
 
