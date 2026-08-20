@@ -33,4 +33,13 @@ function buildMainMenu(userId) {
   };
 }
 
-module.exports = { buildMainMenu };
+// دکمه‌های ثابت پایین چت
+function buildPersistentMenu() {
+  return [
+    { text: '⚔️ نبرد', callback_data: 'battle_menu' },
+    { text: '🛒 فروشگاه', callback_data: 'shop_menu' },
+    { text: '📚 راهنما', callback_data: 'guide_menu' }
+  ];
+}
+
+module.exports = { buildMainMenu, buildPersistentMenu };
