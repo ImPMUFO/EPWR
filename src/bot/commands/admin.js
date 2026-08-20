@@ -105,6 +105,31 @@ module.exports = function registerAdmin(bot) {
     await showGiftList(ctx);
   });
 
+  // ═══ همگام‌سازی گروه‌ها ═══
+  bot.action(/^admin_sync_groups\|(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    if (ctx.from.id !== ADMIN_ID) return;
+    
+    const db = getSupabase();
+    const { data: groups } = await db.from('bot_groups').select('*');
+    
+    let msg = `🔄 *گروه‌های ذخیره شده*\n\n`;
+    if (!groups || groups.length === 0) {
+      msg += `📭 گروهی ذخیره نشده!\n\n`;
+      msg += `💡 وقتی ربات توی گروه پیامی بگیره، خودکار ذخیره میشه.`;
+    } else {
+      msg += `👥 تعداد: ${groups.length}\n\n`;
+      groups.forEach(g => {
+        msg += `• ${g.group_name || 'بدون نام'} (${g.group_id})\n`;
+      });
+    }
+    
+    await ctx.editMessageText(msg, {
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: cb('admin', ctx.from.id) }]] }
+    });
+  });
+
   bot.on('text', async (ctx, next) => {
     if (ctx.from.id !== ADMIN_ID) return next();
     const state = getState(ctx.from.id);
@@ -232,7 +257,6 @@ module.exports = function registerAdmin(bot) {
     const db = getSupabase();
     clearState(ctx.from.id);
 
-    // فرستادن به کاربران
     const { data: players } = await db.from('players').select('telegram_id');
     let sentUsers = 0, failedUsers = 0;
     for (const p of players || []) {
@@ -242,7 +266,6 @@ module.exports = function registerAdmin(bot) {
       } catch(e) { failedUsers++; }
     }
 
-    // فرستادن به گروه‌ها
     const { data: groups } = await db.from('bot_groups').select('group_id, group_name');
     let sentGroups = 0, failedGroups = 0;
     for (const g of groups || []) {
@@ -294,6 +317,7 @@ module.exports = function registerAdmin(bot) {
           [{ text: '🎁 هدیه به همه', callback_data: cb('admin_gift_all', uid) }],
           [{ text: '📢 پیام همگانی', callback_data: cb('admin_broadcast', uid) }],
           [{ text: '📊 آمار', callback_data: cb('admin_stats', uid) }],
+          [{ text: '🔄 گروه‌ها', callback_data: cb('admin_sync_groups', uid) }],
           [{ text: '🔙 بازگشت', callback_data: cb('mainmenu', uid) }]
         ]
       }
