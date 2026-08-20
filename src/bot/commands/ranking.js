@@ -1,5 +1,5 @@
 const { getSupabase } = require('../../core/supabase');
-const { formatGold, cb } = require('../../core/helpers');
+const { formatGold, smartReply, cb } = require('../../core/helpers');
 
 module.exports = function registerRanking(bot) {
   bot.action(/^ranking\|(\d+)$/, async (ctx) => {
