@@ -1,4 +1,5 @@
 const { getOrCreatePlayer } = require('../../game/player');
+const { joinAllianceByInvite } = require('../../game/alliance');
 const { processFoodConsumption } = require('../../game/food');
 const { processKitchenProduction } = require('../../game/buildings');
 const { formatGold, reply, cb } = require('../../core/helpers');
@@ -8,6 +9,19 @@ module.exports = function registerStart(bot) {
   bot.start(async (ctx) => {
     try {
       const player = await getOrCreatePlayer(ctx.from);
+      
+      // ═══ چک دعوت اتحاد ═══
+      const startPayload = ctx.startPayload;
+      if (startPayload && startPayload.startsWith('alliance_')) {
+        const inviteCode = startPayload.replace('alliance_', '');
+        const result = await joinAllianceByInvite(ctx.from.id, inviteCode);
+        if (result.success) {
+          await reply(ctx, `🎉 *به اتحاد "${result.alliance.name}" خوش آمدی!*\n\nبرای مدیریت اتحاد، /alliance بزن.`, { parse_mode: 'Markdown' });
+        } else {
+          await reply(ctx, result.message);
+        }
+      }
+      
       await processKitchenProduction(ctx.from.id);
       await processFoodConsumption(ctx.from.id);
 
