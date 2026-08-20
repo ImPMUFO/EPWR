@@ -36,15 +36,29 @@ module.exports = function registerBuildings(bot) {
     for (const [key, b] of Object.entries(BUILDINGS)) {
       const level = builtMap[key] || 0;
       if (level === 0) {
-        const costStr = Object.entries(b.base_cost).map(([r, a]) => `${a} ${getResIcon(r)}`).join(' + ');
-        msg += `${b.name}\n   📖 ${b.desc}\n   💵 ${costStr}\n\n`;
+        msg += `${b.name}\n`;
+        msg += `   📖 ${b.desc}\n`;
+        msg += `   💵 *هزینه ساخت:*\n`;
+        for (const [res, amount] of Object.entries(b.base_cost)) {
+          const have = player[res] || 0;
+          const enough = have >= amount ? '✅' : '❌';
+          msg += `      ${getResIcon(res)} ${amount} ${getResName(res)} (داری: ${have}) ${enough}\n`;
+        }
+        msg += `\n`;
         buttons.push([{ text: `🔨 ساخت ${b.name}`, callback_data: `build|${key}|${uid}` }]);
       } else {
         const isMax = level >= b.max_level;
-        msg += `${b.name} *Lv.${level}*\n   📖 ${b.desc}\n`;
+        msg += `${b.name} *Lv.${level}*\n`;
+        msg += `   📖 ${b.desc}\n`;
         if (!isMax) {
-          const upgradeCost = Object.entries(b.base_cost).map(([r, a]) => `${Math.floor(a * (1 + level * 0.5))} ${getResIcon(r)}`).join(' + ');
-          msg += `   ⬆️ ارتقا: ${upgradeCost}\n\n`;
+          msg += `   ⬆️ *هزینه ارتقا:*\n`;
+          for (const [res, amount] of Object.entries(b.base_cost)) {
+            const upgradeAmount = Math.floor(amount * (1 + level * 0.5));
+            const have = player[res] || 0;
+            const enough = have >= upgradeAmount ? '✅' : '❌';
+            msg += `      ${getResIcon(res)} ${upgradeAmount} ${getResName(res)} (داری: ${have}) ${enough}\n`;
+          }
+          msg += `\n`;
           buttons.push([{ text: `⬆️ ارتقا ${b.name} (Lv.${level}→${level + 1})`, callback_data: `upgrade|${key}|${uid}` }]);
         } else {
           msg += `   🏆 حداکثر سطح!\n\n`;
@@ -52,10 +66,10 @@ module.exports = function registerBuildings(bot) {
       }
     }
 
-    msg += `\n💡 *راهنمای منابع:*\n`;
-    msg += `🪵 چوب: از فروشگاه منابع\n`;
-    msg += `🪨 سنگ: از فروشگاه منابع\n`;
-    msg += `⚙️ آهن: از فروشگاه منابع\n`;
+    msg += `💡 *راهنمای منابع:*\n`;
+    msg += `🪵 چوب: از فروشگاه → منابع\n`;
+    msg += `🪨 سنگ: از فروشگاه → منابع\n`;
+    msg += `⚙️ آهن: از فروشگاه → منابع\n`;
     msg += `💰 سکه: از جنگ و دستگاه‌ها`;
 
     buttons.push([{ text: '🔙 بازگشت', callback_data: cb('mainmenu', uid) }]);
