@@ -13,19 +13,18 @@ function buildMainMenu(userId) {
           { text: '🏗️ ساختمان‌ها', callback_data: cb('buildings', userId) }
         ],
         [
-          { text: '🗺️ جهان', callback_data: cb('world', userId) },
-          { text: '💰 منابع', callback_data: cb('resources', userId) }
+          { text: '💰 منابع', callback_data: cb('resources', userId) },
+          { text: '🤝 اتحاد', callback_data: cb('alliance', userId) }
         ],
         [
-          { text: '🤝 اتحاد', callback_data: cb('alliance', userId) },
-          { text: '📜 مأموریت', callback_data: cb('quest', userId) }
+          { text: '📜 مأموریت', callback_data: cb('quest', userId) },
+          { text: '🔔 اعلان‌ها', callback_data: cb('notifications', userId) }
         ],
         [
-          { text: '🔔 اعلان‌ها', callback_data: cb('notifications', userId) },
-          { text: '🏆 رتبه‌بندی', callback_data: cb('ranking', userId) }
+          { text: '🏆 رتبه‌بندی', callback_data: cb('ranking', userId) },
+          { text: '🎁 کد هدیه', callback_data: cb('gift', userId) }
         ],
         [
-          { text: '🎁 کد هدیه', callback_data: cb('gift', userId) },
           { text: '📚 راهنما', callback_data: cb('guide', userId) }
         ]
       ]
@@ -33,7 +32,6 @@ function buildMainMenu(userId) {
   };
 }
 
-// دکمه‌های ثابت پایین چت
 function buildPersistentMenu() {
   return [
     { text: '⚔️ نبرد', callback_data: 'battle_menu' },
