@@ -1,6 +1,6 @@
 const { getBotRealms, getDefeatedNPCs } = require('../../game/battle');
 const { getSupabase } = require('../../core/supabase');
-const { reply, cb } = require('../../core/helpers');
+const { smartReply, cb } = require('../../core/helpers');
 
 module.exports = function registerWorld(bot) {
   bot.command('world', async (ctx) => { await showWorld(ctx); });
@@ -23,6 +23,6 @@ module.exports = function registerWorld(bot) {
     });
     buttons.push([{ text: '⚔️ نبرد', callback_data: cb('battle', uid) }]);
     buttons.push([{ text: '🔙', callback_data: cb('mainmenu', uid) }]);
-    await reply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+    await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
 };
