@@ -1,7 +1,7 @@
 const { getOrCreatePlayer } = require('../../game/player');
 const { getAllCharacters, getAllItems, getCharacterById, getItemById, purchaseCharacter, purchaseItem, usePotion, getPlayerItems } = require('../../game/shop');
 const { getPlayerHeroes, getHeroById } = require('../../game/heroes');
-const { rarityEmoji, formatGold, reply, cb } = require('../../core/helpers');
+const { rarityEmoji, formatGold, smartReply, cb } = require('../../core/helpers');
 
 module.exports = function registerShop(bot) {
   bot.command('shop', async (ctx) => { await showShop(ctx); });
@@ -88,7 +88,7 @@ module.exports = function registerShop(bot) {
     }
     buttons.push([{ text: '👥 قهرمانان من', callback_data: cb('myheroes', uid) }, { text: '📦 آیتم‌ها', callback_data: cb('myitems', uid) }]);
     buttons.push([{ text: '🔙 بازگشت', callback_data: cb('mainmenu', uid) }]);
-    await reply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+    await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
 
   async function showMyHeroes(ctx) {
@@ -110,6 +110,6 @@ module.exports = function registerShop(bot) {
       buttons.push(row);
     }
     buttons.push([{ text: '🛒 فروشگاه', callback_data: cb('shop', uid) }, { text: '🔙', callback_data: cb('mainmenu', uid) }]);
-    await reply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+    await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
 };
