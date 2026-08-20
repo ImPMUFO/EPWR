@@ -153,4 +153,5 @@ module.exports = function registerShop(bot) {
     ]);
     await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
+module.exports.showShop = showShop;
 };
