@@ -17,12 +17,16 @@ async function createAlliance(telegramId, name, tag, description, linkedGroupId 
   return { success: true, alliance };
 }
 
+// ═══ نقش رهبر همیشه درست تشخیص داده میشه ═══
 async function getPlayerAlliance(telegramId) {
   const db = getSupabase();
   const { data } = await db.from('alliance_members')
-    .select('alliance:alliances (*), role')
+    .select('alliance:alliances (*), role, last_daily_claim')
     .eq('telegram_id', telegramId)
     .maybeSingle();
+  if (data && data.alliance && data.alliance.leader_id === telegramId) {
+    data.role = 'leader';
+  }
   return data;
 }
 
@@ -38,7 +42,6 @@ async function getAllianceByInviteCode(inviteCode) {
   return data;
 }
 
-// ═══ عضویت با تشخیص نقش (رهبر اصلی دوباره رهبر میشه) ═══
 async function joinAlliance(telegramId, allianceId) {
   const db = getSupabase();
   const { data: alliance } = await db.from('alliances').select('*').eq('id', allianceId).single();
@@ -51,9 +54,7 @@ async function joinAlliance(telegramId, allianceId) {
   const maxMembers = MAX_MEMBERS_PER_LEVEL[alliance.level || 1] || 10;
   if (members.length >= maxMembers) return { success: false, message: '❌ اتحاد پر است!' };
 
-  // ═══ اگه سازنده اصلی اتحاد هست، رهبر میشه ═══
   const role = alliance.leader_id === telegramId ? 'leader' : 'member';
-
   await db.from('alliance_members').insert({ alliance_id: allianceId, telegram_id: telegramId, role });
   return { success: true, alliance, role };
 }
@@ -84,15 +85,12 @@ async function getAllianceMembers(allianceId) {
   return data || [];
 }
 
-// ═══ ویرایش اطلاعات اتحاد (نام، تگ، بیوگرافی) ═══
 async function updateAllianceInfo(telegramId, updates) {
   const db = getSupabase();
   const member = await getPlayerAlliance(telegramId);
   if (!member) return { success: false, message: '❌ عضو اتحاد نیستید!' };
   if (member.role !== 'leader') return { success: false, message: '❌ فقط رهبر می‌تواند ویرایش کند!' };
-
   if (updates.tag) updates.tag = updates.tag.toUpperCase();
-
   const { error } = await db.from('alliances').update(updates).eq('id', member.alliance.id);
   if (error) return { success: false, message: '❌ این تگ قبلاً استفاده شده!' };
   return { success: true };
@@ -128,6 +126,35 @@ async function depositToTreasury(telegramId, amount) {
   return { success: true };
 }
 
+// ═══ جایزه روزانه از خزانه ═══
+async function claimDailyReward(telegramId) {
+  const db = getSupabase();
+  const member = await getPlayerAlliance(telegramId);
+  if (!member) return { success: false, message: '❌ عضو اتحاد نیستید!' };
+
+  const lastClaim = member.last_daily_claim ? new Date(member.last_daily_claim) : null;
+  const now = new Date();
+  if (lastClaim) {
+    const hoursPassed = (now - lastClaim) / (1000 * 60 * 60);
+    if (hoursPassed < 24) {
+      const remaining = Math.ceil(24 - hoursPassed);
+      return { success: false, message: `❌ جایزه امروز رو گرفتی! (${remaining} ساعت دیگه)` };
+    }
+  }
+
+  const alliance = member.alliance;
+  const reward = DAILY_REWARD_PER_LEVEL[alliance.level || 1] || 0;
+  if (reward <= 0) return { success: false, message: '❌ اتحاد باید سطح ۲ باشه برای جایزه!' };
+  if ((alliance.treasury_gold || 0) < reward) return { success: false, message: '❌ خزانه خالیه! واریز کنید.' };
+
+  const { data: player } = await db.from('players').select('gold').eq('telegram_id', telegramId).single();
+  await db.from('players').update({ gold: player.gold + reward }).eq('telegram_id', telegramId);
+  await db.from('alliances').update({ treasury_gold: alliance.treasury_gold - reward }).eq('id', alliance.id);
+  await db.from('alliance_members').update({ last_daily_claim: now.toISOString() }).eq('alliance_id', alliance.id).eq('telegram_id', telegramId);
+
+  return { success: true, reward };
+}
+
 async function upgradeAlliance(telegramId) {
   const db = getSupabase();
   const member = await getPlayerAlliance(telegramId);
@@ -142,12 +169,13 @@ async function upgradeAlliance(telegramId) {
   return { success: true, newLevel: currentLevel + 1 };
 }
 
+// ═══ جنگ با بونوس خزانه ═══
 async function startAllianceWar(attackerAllianceId, defenderAllianceId) {
   const db = getSupabase();
   const { data: attacker } = await db.from('alliances').select('*').eq('id', attackerAllianceId).single();
   const { data: defender } = await db.from('alliances').select('*').eq('id', defenderAllianceId).single();
-  const attackerPower = (WAR_POWER_PER_LEVEL[attacker.level || 1] || 100) + Math.floor(Math.random() * 50);
-  const defenderPower = (WAR_POWER_PER_LEVEL[defender.level || 1] || 100) + Math.floor(Math.random() * 50);
+  const attackerPower = (WAR_POWER_PER_LEVEL[attacker.level || 1] || 100) + Math.floor((attacker.treasury_gold || 0) / 100) + Math.floor(Math.random() * 50);
+  const defenderPower = (WAR_POWER_PER_LEVEL[defender.level || 1] || 100) + Math.floor((defender.treasury_gold || 0) / 100) + Math.floor(Math.random() * 50);
   const attackerWins = attackerPower >= defenderPower;
   const goldStolen = attackerWins ? Math.min(Math.floor((defender.treasury_gold || 0) * 0.1), 500) : 0;
   if (attackerWins && goldStolen > 0) {
@@ -176,7 +204,7 @@ async function getAllianceWars(allianceId) {
 module.exports = {
   createAlliance, getPlayerAlliance, getAllianceByGroupId, getAllianceByInviteCode,
   joinAlliance, joinAllianceByInvite, getAllAlliances, getTopAlliances, getAllianceMembers,
-  updateAllianceInfo, leaveAlliance, deleteAlliance, depositToTreasury,
+  updateAllianceInfo, leaveAlliance, deleteAlliance, depositToTreasury, claimDailyReward,
   upgradeAlliance, startAllianceWar, getAllianceWars, MAX_MEMBERS_PER_LEVEL,
   WAR_POWER_PER_LEVEL, DAILY_REWARD_PER_LEVEL
 };
