@@ -38,14 +38,30 @@ async function getAllianceByInviteCode(inviteCode) {
   return data;
 }
 
-async function joinAllianceByInvite(telegramId, inviteCode) {
+// ═══ عضویت با تشخیص نقش (رهبر اصلی دوباره رهبر میشه) ═══
+async function joinAlliance(telegramId, allianceId) {
   const db = getSupabase();
-  const alliance = await getAllianceByInviteCode(inviteCode);
-  if (!alliance) return { success: false, message: '❌ کد دعوت نامعتبره!' };
+  const { data: alliance } = await db.from('alliances').select('*').eq('id', allianceId).single();
+  if (!alliance) return { success: false, message: '❌ اتحاد پیدا نشد!' };
+
   const { data: existing } = await db.from('alliance_members').select('alliance_id').eq('telegram_id', telegramId).maybeSingle();
   if (existing) return { success: false, message: '❌ قبلاً عضو اتحاد هستید!' };
-  await db.from('alliance_members').insert({ alliance_id: alliance.id, telegram_id: telegramId, role: 'member' });
-  return { success: true, alliance };
+
+  const members = await getAllianceMembers(allianceId);
+  const maxMembers = MAX_MEMBERS_PER_LEVEL[alliance.level || 1] || 10;
+  if (members.length >= maxMembers) return { success: false, message: '❌ اتحاد پر است!' };
+
+  // ═══ اگه سازنده اصلی اتحاد هست، رهبر میشه ═══
+  const role = alliance.leader_id === telegramId ? 'leader' : 'member';
+
+  await db.from('alliance_members').insert({ alliance_id: allianceId, telegram_id: telegramId, role });
+  return { success: true, alliance, role };
+}
+
+async function joinAllianceByInvite(telegramId, inviteCode) {
+  const alliance = await getAllianceByInviteCode(inviteCode);
+  if (!alliance) return { success: false, message: '❌ کد دعوت نامعتبره!' };
+  return joinAlliance(telegramId, alliance.id);
 }
 
 async function getAllAlliances() {
@@ -68,20 +84,17 @@ async function getAllianceMembers(allianceId) {
   return data || [];
 }
 
-async function renameAlliance(telegramId, newName) {
+// ═══ ویرایش اطلاعات اتحاد (نام، تگ، بیوگرافی) ═══
+async function updateAllianceInfo(telegramId, updates) {
   const db = getSupabase();
   const member = await getPlayerAlliance(telegramId);
   if (!member) return { success: false, message: '❌ عضو اتحاد نیستید!' };
-  if (member.role !== 'leader') return { success: false, message: '❌ فقط رهبر!' };
-  await db.from('alliances').update({ name: newName }).eq('id', member.alliance.id);
-  return { success: true };
-}
+  if (member.role !== 'leader') return { success: false, message: '❌ فقط رهبر می‌تواند ویرایش کند!' };
 
-async function requestJoin(telegramId, allianceId) {
-  const db = getSupabase();
-  const { data: existing } = await db.from('alliance_members').select('alliance_id').eq('telegram_id', telegramId).maybeSingle();
-  if (existing) return { success: false, message: '❌ قبلاً عضو اتحاد هستید!' };
-  await db.from('alliance_join_requests').insert({ alliance_id: allianceId, telegram_id: telegramId });
+  if (updates.tag) updates.tag = updates.tag.toUpperCase();
+
+  const { error } = await db.from('alliances').update(updates).eq('id', member.alliance.id);
+  if (error) return { success: false, message: '❌ این تگ قبلاً استفاده شده!' };
   return { success: true };
 }
 
@@ -162,8 +175,8 @@ async function getAllianceWars(allianceId) {
 
 module.exports = {
   createAlliance, getPlayerAlliance, getAllianceByGroupId, getAllianceByInviteCode,
-  joinAllianceByInvite, getAllAlliances, getTopAlliances, getAllianceMembers,
-  renameAlliance, requestJoin, leaveAlliance, deleteAlliance, depositToTreasury,
+  joinAlliance, joinAllianceByInvite, getAllAlliances, getTopAlliances, getAllianceMembers,
+  updateAllianceInfo, leaveAlliance, deleteAlliance, depositToTreasury,
   upgradeAlliance, startAllianceWar, getAllianceWars, MAX_MEMBERS_PER_LEVEL,
   WAR_POWER_PER_LEVEL, DAILY_REWARD_PER_LEVEL
 };
