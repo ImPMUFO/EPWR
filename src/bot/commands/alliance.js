@@ -1,4 +1,4 @@
-const { createAlliance, getPlayerAlliance, getAllAlliances, getTopAlliances, getAllianceMembers, joinAlliance, updateAllianceInfo, leaveAlliance, deleteAlliance, depositToTreasury, upgradeAlliance, startAllianceWar, getAllianceWars, MAX_MEMBERS_PER_LEVEL, WAR_POWER_PER_LEVEL, DAILY_REWARD_PER_LEVEL } = require('../../game/alliance');
+const { createAlliance, getPlayerAlliance, getAllAlliances, getTopAlliances, getAllianceMembers, joinAlliance, updateAllianceInfo, leaveAlliance, deleteAlliance, depositToTreasury, claimDailyReward, upgradeAlliance, startAllianceWar, getAllianceWars, MAX_MEMBERS_PER_LEVEL, WAR_POWER_PER_LEVEL, DAILY_REWARD_PER_LEVEL } = require('../../game/alliance');
 const { getSupabase } = require('../../core/supabase');
 const { formatGold, smartReply, cb } = require('../../core/helpers');
 
@@ -94,7 +94,7 @@ module.exports = function registerAlliance(bot) {
     }
   });
 
-  // ═══ عضویت (با تشخیص رهبر اصلی) ═══
+  // ═══ عضویت ═══
   bot.action(/^ajoin\|(\d+)\|(\d+)$/, async (ctx) => {
     try {
       await ctx.answerCbQuery();
@@ -123,7 +123,7 @@ module.exports = function registerAlliance(bot) {
     });
   });
 
-  // ═══ منوی ویرایش (رهبر) ═══
+  // ═══ منوی ویرایش ═══
   bot.action(/^alliance_edit\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const uid = ctx.from.id;
@@ -148,7 +148,7 @@ module.exports = function registerAlliance(bot) {
   bot.action(/^alliance_edit_tag\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     allianceState.set(ctx.from.id, { step: 'edit_tag', data: {} });
-    await smartReply(ctx, '🔤 *تغییر تگ*\n\nتگ جدید رو تایپ کن:\n(مثلاً: EPWR)', {
+    await smartReply(ctx, '🔤 *تغییر تگ*\n\nتگ جدید رو تایپ کن:', {
       reply_markup: { inline_keyboard: [[{ text: '❌', callback_data: cb('alliance_edit', ctx.from.id) }]] }
     });
   });
@@ -175,6 +175,18 @@ module.exports = function registerAlliance(bot) {
       `🔗 *لینک دعوت*\n\n⚜️ ${member.alliance.name}\n\n📋 *لینک:*\n\`${inviteLink}\`\n\n💡 به دوستانت بده!`,
       { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('alliance', ctx.from.id) }]] } }
     );
+  });
+
+  // ═══ جایزه روزانه ═══
+  bot.action(/^alliance_daily\|(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const result = await claimDailyReward(ctx.from.id);
+    if (result.success) {
+      await ctx.answerCbQuery(`🎁 +${result.reward} سکه گرفتی!`, { show_alert: true });
+    } else {
+      await ctx.answerCbQuery(result.message, { show_alert: true });
+    }
+    await showAllianceMenu(ctx);
   });
 
   // ═══ ترک اتحاد ═══
@@ -344,7 +356,6 @@ module.exports = function registerAlliance(bot) {
       return;
     }
 
-    // ═══ ویرایش اتحاد ═══
     if (state.step === 'edit_name') {
       const result = await updateAllianceInfo(ctx.from.id, { name: text });
       allianceState.delete(ctx.from.id);
@@ -381,7 +392,7 @@ module.exports = function registerAlliance(bot) {
     return next();
   });
 
-  // ═══ منوی اصلی اتحاد (دکمه‌های جمع و جور) ═══
+  // ═══ منوی اصلی اتحاد ═══
   async function showAllianceMenu(ctx) {
     try {
       const member = await getPlayerAlliance(ctx.from.id);
@@ -394,31 +405,35 @@ module.exports = function registerAlliance(bot) {
         const groupIcon = alliance.linked_group_id ? ' 🎏 گروه' : '';
 
         let msg = `⚜️ *${alliance.name}*${groupIcon}\n`;
-        msg += `⭐ Lv.${currentLevel} | 💰 ${formatGold(alliance.treasury_gold || 0)} | ⚔️ ${WAR_POWER_PER_LEVEL[currentLevel] || 100}\n`;
+        msg += `⭐ Lv.${currentLevel} | 💰 خزانه: ${formatGold(alliance.treasury_gold || 0)}\n`;
+        msg += `⚔️ قدرت: ${WAR_POWER_PER_LEVEL[currentLevel] || 100} (+${Math.floor((alliance.treasury_gold || 0) / 100)} بونوس خزانه)\n`;
         msg += `👑 نقش: ${member.role === 'leader' ? 'رهبر' : 'عضو'}\n`;
         if (alliance.description) msg += `📖 ${alliance.description}\n`;
-        msg += `\n`;
-        if (currentLevel < 5) {
-          msg += `💡 *ارتقا به Lv.${currentLevel + 1}:* ⚔️${WAR_POWER_PER_LEVEL[currentLevel + 1]} | 🎁${DAILY_REWARD_PER_LEVEL[currentLevel + 1]} | 👥${MAX_MEMBERS_PER_LEVEL[currentLevel + 1]}\n`;
-        }
+        msg += `\n💰 *فایده خزانه:*\n`;
+        msg += `• 🎁 جایزه روزانه اعضا\n`;
+        msg += `• ⚔️ بونوس قدرت جنگ\n`;
+        msg += `• ⬆️ ارتقای اتحاد\n`;
 
         const buttons = [];
         buttons.push([
           { text: '💰 واریز', callback_data: cb('alliance_deposit', uid) },
-          { text: '👥 اعضا', callback_data: cb('alliance_members', uid) }
+          { text: '🎁 جایزه روزانه', callback_data: cb('alliance_daily', uid) }
+        ]);
+        buttons.push([
+          { text: '👥 اعضا', callback_data: cb('alliance_members', uid) },
+          { text: '🔗 دعوت', callback_data: cb('alliance_invite', uid) }
         ]);
         buttons.push([
           { text: '⚔️ جنگ', callback_data: cb('alliance_war', uid) },
           { text: '📜 تاریخچه', callback_data: cb('alliance_wars', uid) }
         ]);
-        buttons.push([
-          { text: '🔗 دعوت', callback_data: cb('alliance_invite', uid) },
-          { text: '✏️ ویرایش', callback_data: cb('alliance_edit', uid) }
-        ]);
         if (member.role === 'leader') {
           buttons.push([
-            { text: `⬆️ ارتقا (${formatGold(upgradeCost)})`, callback_data: cb('alliance_upgrade', uid) },
+            { text: '✏️ ویرایش', callback_data: cb('alliance_edit', uid) },
             { text: '🗑️ حذف', callback_data: cb('alliance_delete', uid) }
+          ]);
+          buttons.push([
+            { text: `⬆️ ارتقا به Lv.${currentLevel + 1} (${formatGold(upgradeCost)})`, callback_data: cb('alliance_upgrade', uid) }
           ]);
         }
         buttons.push([
