@@ -1,6 +1,6 @@
 const { getSupabase } = require('../core/supabase');
 
-const RESOURCE_NAMES = { wood: '🪵 چوب', stone: '🪨 سنگ', iron: '⚙️ آهن', food: '🍖 غذا', egg: '🥚 تخم مرغ' };
+const RESOURCE_NAMES = { wood: '🪵 چوب', stone: '🪨 سنگ', iron: '⚙️ آهن', food: '🍖 غذا', egg: '🥚 تخم مرغ', wheat: '🌾 گندم', flour: '🥡 آرد', bread: '🍞 نان' };
 
 function colName(res) { return res === 'egg' ? 'eggs' : res; }
 
