@@ -1,6 +1,7 @@
 const { getSupabase } = require('../core/supabase');
 const { addPlayerXp, xpForActivity } = require('./xp');
 const { updateQuestProgress } = require('./quest');
+const { getListedHeroIds } = require('./market');
 
 const battleSessions = new Map();
 
@@ -15,13 +16,28 @@ function clearSession(telegramId) {
   battleSessions.delete(telegramId);
 }
 
+const HERO_SELECT = 'id, level, xp, current_health, troops, is_defender, template:character_templates (id, name, base_attack, base_defense, base_health, rarity)';
+
 async function getPlayerHeroes(telegramId) {
   const db = getSupabase();
-  const { data } = await db
-    .from('player_characters')
-    .select('id, level, xp, current_health, template:character_templates (id, name, base_attack, base_defense, base_health, rarity)')
-    .eq('telegram_id', telegramId)
-    .gt('current_health', 0);
+  const { data } = await db.from('player_characters').select(HERO_SELECT).eq('telegram_id', telegramId).gt('current_health', 0);
+  return data || [];
+}
+
+// ═══ قهرمان‌های حمله (غیر دفاعی و غیر فروشی) ═══
+async function getAttackHeroes(telegramId) {
+  const db = getSupabase();
+  const listed = await getListedHeroIds(telegramId);
+  const { data } = await db.from('player_characters').select(HERO_SELECT)
+    .eq('telegram_id', telegramId).gt('current_health', 0).eq('is_defender', false);
+  return (data || []).filter(h => !listed.includes(h.id));
+}
+
+// ═══ قهرمان‌های دفاعی ═══
+async function getDefenderHeroes(telegramId) {
+  const db = getSupabase();
+  const { data } = await db.from('player_characters').select(HERO_SELECT)
+    .eq('telegram_id', telegramId).gt('current_health', 0).eq('is_defender', true);
   return data || [];
 }
 
@@ -37,16 +53,17 @@ async function getDefeatedNPCs(telegramId) {
   return (data || []).map(d => d.bot_realm_id);
 }
 
+// ═══ قدرت با احتساب سربازها ═══
 function calcTeamPower(heroes) {
   return heroes.reduce((sum, h) => {
     const t = h.template;
-    return sum + t.base_attack + t.base_defense + h.level * 5;
+    return sum + t.base_attack + t.base_defense + h.level * 5 + (h.troops || 0) * 2;
   }, 0);
 }
 
 async function fightNPC(telegramId, botRealm, selectedHeroIds) {
   const db = getSupabase();
-  const heroes = await getPlayerHeroes(telegramId);
+  const heroes = await getAttackHeroes(telegramId);
   const selected = heroes.filter(h => selectedHeroIds.includes(h.id));
   if (selected.length === 0) return { success: false, message: '❌ قهرمانی انتخاب نکردی!' };
   const playerPower = calcTeamPower(selected) + Math.floor(Math.random() * 15);
@@ -70,7 +87,6 @@ async function fightNPC(telegramId, botRealm, selectedHeroIds) {
       await db.from('player_characters').update({ current_health: newHp, xp: finalXp, level: newLevel }).eq('id', hero.id);
     }
     await addPlayerXp(telegramId, xpForActivity('battle_win'));
-    // ═══ آپدیت مأموریت‌ها ═══
     await updateQuestProgress(telegramId, 'battle_win');
   } else {
     for (const hero of selected) {
@@ -80,7 +96,7 @@ async function fightNPC(telegramId, botRealm, selectedHeroIds) {
         await db.from('player_characters').delete().eq('id', hero.id);
         deadHeroes.push(hero.template.name);
       } else {
-        await db.from('player_characters').update({ current_health: newHp }).eq('id', hero.id);
+        await db.from('player_characters').update({ current_health: newHp, troops: 0 }).eq('id', hero.id);
       }
     }
     await addPlayerXp(telegramId, xpForActivity('battle_lose'));
@@ -88,4 +104,4 @@ async function fightNPC(telegramId, botRealm, selectedHeroIds) {
   return { success: true, playerWins, playerPower, botPower, goldReward: playerWins ? goldReward : 0, botRealm, selectedHeroes: selected, deadHeroes };
 }
 
-module.exports = { getSession, clearSession, getPlayerHeroes, getBotRealms, getDefeatedNPCs, calcTeamPower, fightNPC };
+module.exports = { getSession, clearSession, getPlayerHeroes, getAttackHeroes, getDefenderHeroes, getBotRealms, getDefeatedNPCs, calcTeamPower, fightNPC };
