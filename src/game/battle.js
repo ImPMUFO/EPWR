@@ -3,16 +3,22 @@ const { addPlayerXp, xpForActivity } = require('./xp');
 const { updateQuestProgress } = require('./quest');
 const { getListedHeroIds } = require('./market');
 const { troopsPower } = require('./troops');
+const { skinBonus, weaponPower } = require('./cosmetics');
 
 const battleSessions = new Map();
 
 function getSession(telegramId) {
-  if (!battleSessions.has(telegramId)) battleSessions.set(telegramId, { selectedHeroes: [], target: null, targetType: null });
+  if (!battleSessions.has(telegramId)) {
+    battleSessions.set(telegramId, { selectedHeroes: [], target: null, targetType: null });
+  }
   return battleSessions.get(telegramId);
 }
-function clearSession(telegramId) { battleSessions.delete(telegramId); }
 
-const HERO_SELECT = 'id, level, xp, current_health, troops_data, is_defender, template:character_templates (id, name, base_attack, base_defense, base_health, rarity)';
+function clearSession(telegramId) {
+  battleSessions.delete(telegramId);
+}
+
+const HERO_SELECT = 'id, level, xp, current_health, troops_data, is_defender, skin, weapon, template:character_templates (id, name, base_attack, base_defense, base_health, rarity)';
 
 async function getPlayerHeroes(telegramId) {
   const db = getSupabase();
@@ -47,10 +53,17 @@ async function getDefeatedNPCs(telegramId) {
   return (data || []).map(d => d.bot_realm_id);
 }
 
+// ═══ قدرت با احتساب سرباز + اسکین + سلاح ═══
 function calcTeamPower(heroes) {
   return heroes.reduce((sum, h) => {
     const t = h.template;
-    return sum + t.base_attack + t.base_defense + h.level * 5 + troopsPower(h.troops_data);
+    const sb = skinBonus(h.skin);
+    return sum +
+      t.base_attack + (sb.attack || 0) +
+      t.base_defense + (sb.defense || 0) +
+      h.level * 5 +
+      troopsPower(h.troops_data) +
+      weaponPower(h.weapon);
   }, 0);
 }
 
