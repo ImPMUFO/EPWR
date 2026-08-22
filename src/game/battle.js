@@ -18,7 +18,13 @@ async function getDefenderHeroes(t){const db=getSupabase();const{data}=await db.
 async function getBotRealms(){const db=getSupabase();const{data}=await db.from('bot_realms').select('*').order('difficulty');return data||[];}
 async function getDefeatedNPCs(t){const db=getSupabase();const{data}=await db.from('npc_defeated').select('bot_realm_id').eq('telegram_id',t);return (data||[]).map(d=>d.bot_realm_id);}
 
-function calcTeamPower(heroes){return heroes.reduce((s,h)=>{const t=h.template;const sb=skinBonus(h.skin);return s+t.base_attack+(sb.attack||0)+t.base_defense+(sb.defense||0)+h.level*5+heroTroopsPower(h)+weaponPower(h.weapon);},0);}
+// ═══ قدرت = پایه + سطح + سربازها + اسکین + سلاح ═══
+function calcTeamPower(heroes){
+  return heroes.reduce((s,h)=>{
+    const t=h.template; const sb=skinBonus(h.skin);
+    return s + t.base_attack + (sb.attack||0) + t.base_defense + (sb.defense||0) + h.level*5 + heroTroopsPower(h) + weaponPower(h.weapon);
+  },0);
+}
 
 async function fightNPC(telegramId, botRealm, selectedHeroIds) {
   const db = getSupabase();
