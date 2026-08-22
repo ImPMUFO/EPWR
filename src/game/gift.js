@@ -1,44 +1,19 @@
 const { getSupabase } = require('../core/supabase');
 
-const ADMIN_ID = 7410098102;
+// ═══ امن: همیشه عدد ═══
+const ADMIN_ID = parseInt(process.env.ADMIN_ID || '0', 10);
 
 async function createGiftCode(code, gold, gems, maxUses, expiresAt) {
   const db = getSupabase();
   const { error } = await db.from('gift_codes').insert({
-    code: code.toUpperCase(), gold_reward: gold, gems_reward: gems,
-    max_uses: maxUses || null, expires_at: expiresAt || null, created_by: ADMIN_ID
+    code: code.toUpperCase(), gold_reward: gold || 0, gems_reward: gems || 0,
+    max_uses: maxUses || 0, current_uses: 0, is_active: true, expires_at: expiresAt
   });
   if (error) {
-    if (error.code === '23505') return { success: false, message: '❌ این کد قبلاً وجود دارد!' };
+    if (error.code === '23505') return { success: false, message: '❌ این کد قبلاً ساخته شده!' };
     return { success: false, message: '❌ خطا در ساخت کد!' };
   }
   return { success: true };
-}
-
-async function redeemGiftCode(telegramId, code) {
-  const db = getSupabase();
-  code = code.toUpperCase().trim();
-  const { data: gift } = await db.from('gift_codes').select('*').eq('code', code).single();
-  if (!gift) return { success: false, message: '❌ کد هدیه پیدا نشد!' };
-  if (!gift.is_active) return { success: false, message: '❌ این کد غیرفعال شده!' };
-  if (gift.expires_at && new Date(gift.expires_at) < new Date()) {
-    return { success: false, message: '❌ این کد منقضی شده!' };
-  }
-  if (gift.max_uses && gift.current_uses >= gift.max_uses) {
-    return { success: false, message: '❌ این کد به حداکثر استفاده رسیده!' };
-  }
-  const { data: alreadyUsed } = await db.from('gift_code_uses')
-    .select('id').eq('code_id', gift.id).eq('telegram_id', telegramId).maybeSingle();
-  if (alreadyUsed) return { success: false, message: '❌ شما قبلاً از این کد استفاده کرده‌اید!' };
-  const { data: player } = await db.from('players').select('*').eq('telegram_id', telegramId).single();
-  if (!player) return { success: false, message: '❌ شما هنوز بازیکن نیستید!' };
-  await db.from('players').update({
-    gold: player.gold + gift.gold_reward,
-    gems: player.gems + gift.gems_reward
-  }).eq('telegram_id', telegramId);
-  await db.from('gift_code_uses').insert({ code_id: gift.id, telegram_id: telegramId });
-  await db.from('gift_codes').update({ current_uses: gift.current_uses + 1 }).eq('id', gift.id);
-  return { success: true, gold: gift.gold_reward, gems: gift.gems_reward };
 }
 
 async function getAllGiftCodes() {
@@ -47,29 +22,62 @@ async function getAllGiftCodes() {
   return data || [];
 }
 
-async function toggleGiftCode(codeId) {
+async function toggleGiftCode(id) {
   const db = getSupabase();
-  const { data: gift } = await db.from('gift_codes').select('*').eq('id', codeId).single();
-  if (!gift) return { success: false };
-  await db.from('gift_codes').update({ is_active: !gift.is_active }).eq('id', codeId);
-  return { success: true, newState: !gift.is_active };
+  const { data } = await db.from('gift_codes').select('is_active').eq('id', id).single();
+  await db.from('gift_codes').update({ is_active: !data.is_active }).eq('id', id);
+  return { success: true };
 }
 
-async function deleteGiftCode(codeId) {
+async function deleteGiftCode(id) {
   const db = getSupabase();
-  await db.from('gift_codes').delete().eq('id', codeId);
+  await db.from('gift_code_uses').delete().eq('gift_code_id', id);
+  await db.from('gift_codes').delete().eq('id', id);
   return { success: true };
 }
 
 async function addResources(telegramId, gold, gems) {
   const db = getSupabase();
-  const { data: player } = await db.from('players').select('*').eq('telegram_id', telegramId).single();
-  if (!player) return { success: false, message: '❌ بازیکن پیدا نشد!' };
-  await db.from('players').update({
-    gold: player.gold + (gold || 0),
-    gems: player.gems + (gems || 0)
-  }).eq('telegram_id', telegramId);
+  const { data: player } = await db.from('players').select('gold, gems').eq('telegram_id', telegramId).single();
+  if (!player) return { success: false, message: '❌ کاربر پیدا نشد!' };
+  await db.from('players').update({ gold: player.gold + (gold || 0), gems: player.gems + (gems || 0) }).eq('telegram_id', telegramId);
   return { success: true };
 }
 
-module.exports = { ADMIN_ID, createGiftCode, redeemGiftCode, getAllGiftCodes, toggleGiftCode, deleteGiftCode, addResources };
+// ═══ redeem امن و اتمیک ═══
+async function redeemGiftCode(telegramId, codeText) {
+  const db = getSupabase();
+  const clean = (codeText || '').trim().toUpperCase();
+  if (!clean) return { success: false, message: '❌ کدی وارد نکردی!' };
+
+  const { data: code } = await db.from('gift_codes').select('*').eq('code', clean).maybeSingle();
+  if (!code) return { success: false, message: '❌ کد نامعتبره!' };
+  if (!code.is_active) return { success: false, message: '❌ کد غیرفعاله!' };
+  if (code.expires_at && new Date(code.expires_at) < new Date()) return { success: false, message: '❌ کد منقضی شده!' };
+
+  // UNIQUE(gift_code_id, telegram_id) جلوی مصرف دوباره رو می‌گیره
+  const { error: useErr } = await db.from('gift_code_uses').insert({ gift_code_id: code.id, telegram_id: telegramId });
+  if (useErr) return { success: false, message: '❌ قبلاً این کد رو گرفتی!' };
+
+  // ظرفیت با آپدیت خوش‌بینانه (رفع Race)
+  if ((code.max_uses || 0) > 0) {
+    const { data: up } = await db.from('gift_codes')
+      .update({ current_uses: code.current_uses + 1 })
+      .eq('id', code.id).eq('current_uses', code.current_uses)
+      .select();
+    if (!up || up.length === 0) {
+      await db.from('gift_code_uses').delete().eq('gift_code_id', code.id).eq('telegram_id', telegramId);
+      return { success: false, message: '❌ ظرفیت کد پر شده!' };
+    }
+  }
+
+  const { data: player } = await db.from('players').select('gold, gems').eq('telegram_id', telegramId).single();
+  await db.from('players').update({
+    gold: player.gold + (code.gold_reward || 0),
+    gems: player.gems + (code.gems_reward || 0)
+  }).eq('telegram_id', telegramId);
+
+  return { success: true, gold: code.gold_reward || 0, gems: code.gems_reward || 0 };
+}
+
+module.exports = { ADMIN_ID, createGiftCode, getAllGiftCodes, toggleGiftCode, deleteGiftCode, addResources, redeemGiftCode };
