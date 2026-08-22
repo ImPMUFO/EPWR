@@ -5,24 +5,26 @@ const TROOP_TYPES = {
   catapult: { name: '🎯 منجنیق', power: 8, cost: 200 }
 };
 
-function troopsPower(troopsData) {
-  let p = 0;
-  for (const [k, v] of Object.entries(troopsData || {})) {
-    p += (TROOP_TYPES[k]?.power || 0) * v;
-  }
-  return p;
-}
-
 function troopsCount(troopsData) {
   return Object.values(troopsData || {}).reduce((a, b) => a + b, 0);
 }
 
 function troopsText(troopsData) {
   const parts = [];
-  for (const [k, v] of Object.entries(troopsData || {})) {
-    if (v > 0) parts.push(`${TROOP_TYPES[k].name}×${v}`);
-  }
+  for (const [k, v] of Object.entries(troopsData || {})) if (v > 0) parts.push(`${TROOP_TYPES[k].name}×${v}`);
   return parts.join(' ') || '—';
 }
 
-module.exports = { TROOP_TYPES, troopsPower, troopsCount, troopsText };
+// قدرت سرباز خاص هر قهرمان (متفاوت + ضربدر سطح سرباز)
+function heroTroopsPower(hero) {
+  const per = (hero.template && hero.template.troop_power) || 2;
+  const lvl = hero.troop_level || 1;
+  return per * lvl * troopsCount(hero.troops_data);
+}
+
+// حداکثر سرباز بر اساس لول قهرمان
+function heroMaxTroops(hero) {
+  return (hero.level || 1) * ((hero.template && hero.template.troops_per_level) || 2);
+}
+
+module.exports = { TROOP_TYPES, troopsCount, troopsText, heroTroopsPower, heroMaxTroops };
