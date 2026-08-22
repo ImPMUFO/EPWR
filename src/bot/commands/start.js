@@ -34,6 +34,7 @@ module.exports = function registerStart(bot) {
     }
   });
 
+  // ═══ منوی اصلی (با fallback برای پیام عکس) ═══
   bot.action(/^mainmenu\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     await processHeroRest(ctx.from.id);
@@ -42,6 +43,7 @@ module.exports = function registerStart(bot) {
     const greetings = ['⚔️ آماده نبرد بعدی هستی؟', '🛡️ قلمرو تو امنه، ولی برای چقدر؟', '🔥 دشمنان منتظر حمله تو هستن!', '👑 فرمانده، ارتشت آماده‌ست!', '⚡ قدرتت داره بیشتر میشه!'];
     const g = greetings[Math.floor(Math.random() * greetings.length)];
     const msg = `⚔️ *E P W R*\n━━━━━━━━━━━━━━━\n${g}\n\n👑 *${player.commander_name}*\n⭐ Lv.${player.level} | ✨ ${player.xp || 0}/${xpToNext}\n💰 ${formatGold(player.gold)} | 💎 ${player.gems}\n🍖 ${player.food || 0}/${player.food_capacity || 1000}\n━━━━━━━━━━━━━━━\n🎯 فرماندهی کن، فتح کن، حکومت کن!`;
-    await ctx.editMessageText(msg, { parse_mode: 'Markdown', ...buildMainMenu(ctx.from.id) });
+    const opts = { parse_mode: 'Markdown', ...buildMainMenu(ctx.from.id) };
+    try { await ctx.editMessageText(msg, opts); } catch(e) { await ctx.reply(msg, opts); }
   });
 };
