@@ -1,5 +1,7 @@
 const { getSupabase } = require('../core/supabase');
 const { getAttackHeroes, getDefenderHeroes } = require('./battle');
+const { getDefenseBonus } = require('./buildings');
+const { troopsPower } = require('./troops');
 const { addNotification } = require('./notification');
 const { addPlayerXp, xpForActivity } = require('./xp');
 
@@ -7,15 +9,13 @@ async function findPvPTargets(attackerId) {
   const db = getSupabase();
   const { data } = await db.from('players')
     .select('telegram_id, commander_name, level, gold')
-    .neq('telegram_id', attackerId)
-    .gt('level', 0)
-    .limit(5);
+    .neq('telegram_id', attackerId).gt('level', 0).limit(5);
   return data || [];
 }
 
 function calcPower(heroes) {
   return heroes.reduce((s, h) =>
-    s + h.template.base_attack + h.template.base_defense + h.level * 5 + (h.troops || 0) * 2, 0);
+    s + h.template.base_attack + h.template.base_defense + h.level * 5 + troopsPower(h.troops_data), 0);
 }
 
 async function executePvP(attackerId, defenderId, selectedHeroIds) {
@@ -25,10 +25,10 @@ async function executePvP(attackerId, defenderId, selectedHeroIds) {
   if (selected.length === 0) return { success: false, message: '❌ قهرمانی انتخاب نکردی!' };
 
   const defenderHeroes = await getDefenderHeroes(defenderId);
+  const defBonus = await getDefenseBonus(defenderId);
+
   const attackerPower = calcPower(selected) + Math.floor(Math.random() * 20);
-  const defenderPower = defenderHeroes.length > 0
-    ? calcPower(defenderHeroes.slice(0, 3)) + Math.floor(Math.random() * 20)
-    : 20 + Math.floor(Math.random() * 10);
+  const defenderPower = (defenderHeroes.length > 0 ? calcPower(defenderHeroes.slice(0, 3)) : 20) + defBonus + Math.floor(Math.random() * 20);
 
   const attackerWins = attackerPower >= defenderPower;
   const winnerId = attackerWins ? attackerId : defenderId;
@@ -57,11 +57,9 @@ async function executePvP(attackerId, defenderId, selectedHeroIds) {
   }
 
   if (attackerWins) {
-    await addNotification(defenderId, 'attack',
-      `${attacker.commander_name} به شما حمله کرد و پیروز شد!`, attacker.commander_name, goldStolen);
+    await addNotification(defenderId, 'attack', `${attacker.commander_name} به شما حمله کرد و پیروز شد!`, attacker.commander_name, goldStolen);
   } else {
-    await addNotification(defenderId, 'defense',
-      `شما حمله ${attacker.commander_name} را دفع کردید!`, attacker.commander_name, 0);
+    await addNotification(defenderId, 'defense', `شما حمله ${attacker.commander_name} را دفع کردید!`, attacker.commander_name, 0);
   }
 
   return { success: true, attackerWins, attackerPower, defenderPower, goldStolen, defenderName: defender.commander_name };
