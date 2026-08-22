@@ -1,6 +1,7 @@
 const { getOrCreatePlayer } = require('../../game/player');
 const { getAllCharacters, getAllItems, getCharacterById, getItemById, purchaseCharacter, purchaseItem, usePotion, getPlayerItems } = require('../../game/shop');
-const { getPlayerHeroes, getHeroById } = require('../../game/heroes');
+const { getPlayerHeroes } = require('../../game/heroes');
+const { getSupabase } = require('../../core/supabase');
 const { rarityEmoji, formatGold, smartReply, cb } = require('../../core/helpers');
 
 module.exports = function registerShop(bot) {
@@ -34,22 +35,53 @@ module.exports = function registerShop(bot) {
   bot.command('myheroes', async (ctx) => { await showMyHeroes(ctx); });
   bot.action(/^myheroes\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showMyHeroes(ctx); });
 
+  // ═══ جزئیات قهرمان (با دفاع/سرباز) ═══
   bot.action(/^hero\|(.+)\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
-    const hero = await getHeroById(ctx.match[1]);
+    const db = getSupabase();
+    const { data: hero } = await db.from('player_characters')
+      .select('id, level, current_health, xp, is_defender, troops, max_troops, template:character_templates (id, name, base_attack, base_defense, base_health, rarity)')
+      .eq('id', ctx.match[1]).single();
     if (!hero) return;
     const t = hero.template;
     const hp = Math.floor((hero.current_health / (t.base_health * hero.level)) * 100);
-    let msg = `${rarityEmoji(t.rarity)} *${t.name}* Lv.${hero.level}\n❤ ${hp}% | 🗡${t.base_attack} 🛡${t.base_defense}`;
+    let msg = `${rarityEmoji(t.rarity)} *${t.name}* Lv.${hero.level}\n❤ ${hp}% | 🗡${t.base_attack} 🛡${t.base_defense}\n`;
+    msg += `${hero.is_defender ? '🛡 دفاعی' : '⚔️ حمله'} | ⚔️ سرباز: ${hero.troops || 0}/${hero.max_troops}`;
     const buttons = [];
+    buttons.push([
+      { text: hero.is_defender ? '⚔️ حالت حمله' : '🛡 حالت دفاع', callback_data: `hero_def|${hero.id}|${ctx.from.id}` },
+      { text: '⚔️ استخدام سرباز (50💰)', callback_data: `hero_troops|${hero.id}|${ctx.from.id}` }
+    ]);
     if (hero.current_health < t.base_health * hero.level) {
       buttons.push([{ text: '🧪 معجون', callback_data: `use_potion|${hero.id}|${ctx.from.id}` }]);
     }
-    buttons.push([
-      { text: '👥 قهرمانان', callback_data: cb('myheroes', ctx.from.id) },
-      { text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }
-    ]);
+    buttons.push([{ text: '👥 قهرمانان', callback_data: cb('myheroes', ctx.from.id) }, { text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]);
     await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+  });
+
+  // ═══ تغییر حالت دفاع/حمله ═══
+  bot.action(/^hero_def\|(.+)\|(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const db = getSupabase();
+    const { data: hero } = await db.from('player_characters').select('is_defender').eq('id', ctx.match[1]).maybeSingle();
+    if (!hero) return;
+    await db.from('player_characters').update({ is_defender: !hero.is_defender }).eq('id', ctx.match[1]);
+    await ctx.answerCbQuery(!hero.is_defender ? '🛡 برای دفاع تنظیم شد!' : '⚔️ برای حمله تنظیم شد!', { show_alert: true });
+  });
+
+  // ═══ استخدام سرباز ═══
+  bot.action(/^hero_troops\|(.+)\|(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const db = getSupabase();
+    const { data: hero } = await db.from('player_characters').select('*').eq('id', ctx.match[1]).maybeSingle();
+    const { data: player } = await db.from('players').select('gold').eq('telegram_id', ctx.from.id).single();
+    const cost = 50;
+    if (player.gold < cost) return ctx.answerCbQuery('❌ سکه کافی نداری! (50)', { show_alert: true });
+    if (hero.troops >= hero.max_troops) return ctx.answerCbQuery('❌ ظرفیت سرباز پره!', { show_alert: true });
+    const add = Math.min(5, hero.max_troops - hero.troops);
+    await db.from('players').update({ gold: player.gold - cost }).eq('telegram_id', ctx.from.id);
+    await db.from('player_characters').update({ troops: hero.troops + add }).eq('id', ctx.match[1]);
+    await ctx.answerCbQuery(`⚔️ +${add} سرباز به قهرمان پیوست!`, { show_alert: true });
   });
 
   bot.action(/^use_potion\|(.+)\|(\d+)$/, async (ctx) => {
@@ -64,10 +96,7 @@ module.exports = function registerShop(bot) {
     if (items.length === 0) return ctx.answerCbQuery('📦 آیتمی نداری!', { show_alert: true });
     let msg = '📦 *آیتم‌ها*\n\n';
     items.forEach(i => msg += `• ${i.item.name} ${i.is_active ? '⚡' : ''}\n`);
-    await ctx.editMessageText(msg, {
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]] }
-    });
+    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]] } });
   });
 
   async function showShop(ctx, page = 1) {
@@ -77,7 +106,7 @@ module.exports = function registerShop(bot) {
     const uid = ctx.from.id;
 
     let msg = `🛒 *فروشگاه*\n💰 ${formatGold(player.gold)} | 💎 ${player.gems}\n`;
-    msg += `🪵 ${player.wood || 0} | 🪨 ${player.stone || 0} | ⚙️ ${player.iron || 0} | 🍖 ${player.food || 0}\n\n`;
+    msg += `🪵 ${player.wood || 0} | 🪨 ${player.stone || 0} | ⚙️ ${player.iron || 0} | 🍖 ${player.food || 0} | 🥚 ${player.eggs || 0}\n\n`;
 
     const buttons = [];
     const totalPages = 2;
@@ -130,8 +159,12 @@ module.exports = function registerShop(bot) {
   }
 
   async function showMyHeroes(ctx) {
-    const heroes = await getPlayerHeroes(ctx.from.id);
-    if (heroes.length === 0) return ctx.answerCbQuery('👥 قهرمانی نداری!', { show_alert: true });
+    const db = getSupabase();
+    const { data: heroes } = await db.from('player_characters')
+      .select('id, level, current_health, is_defender, troops, template:character_templates (name, base_health, rarity)')
+      .eq('telegram_id', ctx.from.id)
+      .gt('current_health', 0);
+    if (!heroes || heroes.length === 0) return ctx.answerCbQuery('👥 قهرمانی نداری!', { show_alert: true });
     const uid = ctx.from.id;
     let msg = '👥 *قهرمانان*\n\n';
     const buttons = [];
@@ -139,19 +172,17 @@ module.exports = function registerShop(bot) {
       const row = [];
       const h1 = heroes[i];
       const hp1 = Math.floor((h1.current_health / (h1.template.base_health * h1.level)) * 100);
-      row.push({ text: `${rarityEmoji(h1.template.rarity)} ${h1.template.name} ❤${hp1}%`, callback_data: `hero|${h1.id}|${uid}` });
+      const icon1 = h1.is_defender ? '🛡' : '⚔️';
+      row.push({ text: `${icon1} ${h1.template.name} ❤${hp1}%`, callback_data: `hero|${h1.id}|${uid}` });
       if (i + 1 < heroes.length) {
         const h2 = heroes[i + 1];
         const hp2 = Math.floor((h2.current_health / (h2.template.base_health * h2.level)) * 100);
-        row.push({ text: `${rarityEmoji(h2.template.rarity)} ${h2.template.name} ❤${hp2}%`, callback_data: `hero|${h2.id}|${uid}` });
+        const icon2 = h2.is_defender ? '🛡' : '⚔️';
+        row.push({ text: `${icon2} ${h2.template.name} ❤${hp2}%`, callback_data: `hero|${h2.id}|${uid}` });
       }
       buttons.push(row);
     }
-    buttons.push([
-      { text: '🛒 فروشگاه', callback_data: cb('shop', uid) },
-      { text: '🔙', callback_data: cb('mainmenu', uid) }
-    ]);
+    buttons.push([{ text: '🛒 فروشگاه', callback_data: cb('shop', uid) }, { text: '🔙', callback_data: cb('mainmenu', uid) }]);
     await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
-module.exports.showShop = showShop;
 };
