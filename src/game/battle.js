@@ -2,21 +2,17 @@ const { getSupabase } = require('../core/supabase');
 const { addPlayerXp, xpForActivity } = require('./xp');
 const { updateQuestProgress } = require('./quest');
 const { getListedHeroIds } = require('./market');
+const { troopsPower } = require('./troops');
 
 const battleSessions = new Map();
 
 function getSession(telegramId) {
-  if (!battleSessions.has(telegramId)) {
-    battleSessions.set(telegramId, { selectedHeroes: [], target: null, targetType: null });
-  }
+  if (!battleSessions.has(telegramId)) battleSessions.set(telegramId, { selectedHeroes: [], target: null, targetType: null });
   return battleSessions.get(telegramId);
 }
+function clearSession(telegramId) { battleSessions.delete(telegramId); }
 
-function clearSession(telegramId) {
-  battleSessions.delete(telegramId);
-}
-
-const HERO_SELECT = 'id, level, xp, current_health, troops, is_defender, template:character_templates (id, name, base_attack, base_defense, base_health, rarity)';
+const HERO_SELECT = 'id, level, xp, current_health, troops_data, is_defender, template:character_templates (id, name, base_attack, base_defense, base_health, rarity)';
 
 async function getPlayerHeroes(telegramId) {
   const db = getSupabase();
@@ -24,7 +20,6 @@ async function getPlayerHeroes(telegramId) {
   return data || [];
 }
 
-// ═══ قهرمان‌های حمله (غیر دفاعی و غیر فروشی) ═══
 async function getAttackHeroes(telegramId) {
   const db = getSupabase();
   const listed = await getListedHeroIds(telegramId);
@@ -33,7 +28,6 @@ async function getAttackHeroes(telegramId) {
   return (data || []).filter(h => !listed.includes(h.id));
 }
 
-// ═══ قهرمان‌های دفاعی ═══
 async function getDefenderHeroes(telegramId) {
   const db = getSupabase();
   const { data } = await db.from('player_characters').select(HERO_SELECT)
@@ -53,11 +47,10 @@ async function getDefeatedNPCs(telegramId) {
   return (data || []).map(d => d.bot_realm_id);
 }
 
-// ═══ قدرت با احتساب سربازها ═══
 function calcTeamPower(heroes) {
   return heroes.reduce((sum, h) => {
     const t = h.template;
-    return sum + t.base_attack + t.base_defense + h.level * 5 + (h.troops || 0) * 2;
+    return sum + t.base_attack + t.base_defense + h.level * 5 + troopsPower(h.troops_data);
   }, 0);
 }
 
@@ -96,7 +89,7 @@ async function fightNPC(telegramId, botRealm, selectedHeroIds) {
         await db.from('player_characters').delete().eq('id', hero.id);
         deadHeroes.push(hero.template.name);
       } else {
-        await db.from('player_characters').update({ current_health: newHp, troops: 0 }).eq('id', hero.id);
+        await db.from('player_characters').update({ current_health: newHp, troops_data: {} }).eq('id', hero.id);
       }
     }
     await addPlayerXp(telegramId, xpForActivity('battle_lose'));
