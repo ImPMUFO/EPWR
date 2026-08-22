@@ -92,7 +92,7 @@ async function getBot() {
   });
 
   const commands = [
-    'start', 'shop', 'battle', 'realm', 'ranking',
+    'start', 'shop', 'battle', 'realm', 'ranking', 'market',
     'settings', 'gift', 'admin', 'pvp', 'alliance', 'quest',
     'profile', 'notifications', 'buildings', 'guide'
   ];
