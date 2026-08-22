@@ -9,7 +9,8 @@ function buildMainMenu(userId) {
         [{ text: '🏪 تجارت', callback_data: cb('market', userId) }, { text: '💰 منابع', callback_data: cb('resources', userId) }],
         [{ text: '🤝 اتحاد', callback_data: cb('alliance', userId) }, { text: '📜 مأموریت', callback_data: cb('quest', userId) }],
         [{ text: '🔔 اعلان‌ها', callback_data: cb('notifications', userId) }, { text: '🏆 رتبه‌بندی', callback_data: cb('ranking', userId) }],
-        [{ text: '🎁 کد هدیه', callback_data: cb('gift', userId) }, { text: '📚 راهنما', callback_data: cb('guide', userId) }]
+        [{ text: '🎁 کد هدیه', callback_data: cb('gift', userId) }, { text: '📚 راهنما', callback_data: cb('guide', userId) }],
+        [{ text: '👑 پروفایل', callback_data: cb('profile', userId) }]
       ]
     }
   };
