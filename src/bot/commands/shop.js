@@ -31,6 +31,7 @@ module.exports = function registerShop(bot) {
   bot.command('myheroes', async (ctx) => { await showMyHeroes(ctx); });
   bot.action(/^myheroes\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showMyHeroes(ctx); });
 
+  // ═══ جزئیات قهرمان ═══
   bot.action(/^hero\|(.+)\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const db = getSupabase();
@@ -86,6 +87,7 @@ module.exports = function registerShop(bot) {
     await ctx.answerCbQuery(!hero.is_defender ? '🛡 برای دفاع تنظیم شد!' : '⚔️ برای حمله تنظیم شد!', { show_alert: true });
   });
 
+  // ═══ استخدام سرباز اختصاصی ═══
   bot.action(/^recruit\|(.+)\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const db = getSupabase();
@@ -103,6 +105,7 @@ module.exports = function registerShop(bot) {
     await ctx.answerCbQuery(`✅ ${tt.name} پیوست!`, { show_alert: true });
   });
 
+  // ═══ ارتقای سرباز (جدا از قهرمان) ═══
   bot.action(/^troop_up\|(.+)\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const db = getSupabase();
@@ -122,13 +125,14 @@ module.exports = function registerShop(bot) {
     await ctx.answerCbQuery(result.success ? `✅ ❤${result.newHp}` : result.message, { show_alert: true });
   });
 
+  // ═══ آیتم‌ها (با smartReply) ═══
   bot.action(/^myitems\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const items = await getPlayerItems(ctx.from.id);
     if (items.length === 0) return ctx.answerCbQuery('📦 آیتمی نداری!', { show_alert: true });
     let msg = '📦 *آیتم‌ها*\n\n';
     items.forEach(i => msg += `• ${i.item.name} ${i.is_active ? '⚡' : ''}\n`);
-    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]] } });
+    await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]] } });
   });
 
   async function showShop(ctx, page = 1) {
