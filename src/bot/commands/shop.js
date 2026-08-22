@@ -1,7 +1,7 @@
 const { getOrCreatePlayer } = require('../../game/player');
 const { getAllCharacters, getAllItems, getCharacterById, getItemById, purchaseCharacter, purchaseItem, usePotion, getPlayerItems } = require('../../game/shop');
-const { getPlayerHeroes } = require('../../game/heroes');
 const { getSupabase } = require('../../core/supabase');
+const { TROOP_TYPES, troopsPower, troopsCount, troopsText } = require('../../game/troops');
 const { rarityEmoji, formatGold, smartReply, cb } = require('../../core/helpers');
 
 module.exports = function registerShop(bot) {
@@ -35,22 +35,30 @@ module.exports = function registerShop(bot) {
   bot.command('myheroes', async (ctx) => { await showMyHeroes(ctx); });
   bot.action(/^myheroes\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showMyHeroes(ctx); });
 
-  // ═══ جزئیات قهرمان (با دفاع/سرباز) ═══
+  // ═══ جزئیات قهرمان (با دفاع/سرباز متنوع) ═══
   bot.action(/^hero\|(.+)\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const db = getSupabase();
     const { data: hero } = await db.from('player_characters')
-      .select('id, level, current_health, xp, is_defender, troops, max_troops, template:character_templates (id, name, base_attack, base_defense, base_health, rarity)')
+      .select('id, level, current_health, xp, is_defender, troops_data, max_troops, template:character_templates (id, name, base_attack, base_defense, base_health, rarity)')
       .eq('id', ctx.match[1]).single();
     if (!hero) return;
     const t = hero.template;
     const hp = Math.floor((hero.current_health / (t.base_health * hero.level)) * 100);
     let msg = `${rarityEmoji(t.rarity)} *${t.name}* Lv.${hero.level}\n❤ ${hp}% | 🗡${t.base_attack} 🛡${t.base_defense}\n`;
-    msg += `${hero.is_defender ? '🛡 دفاعی' : '⚔️ حمله'} | ⚔️ سرباز: ${hero.troops || 0}/${hero.max_troops}`;
+    msg += `${hero.is_defender ? '🛡 دفاعی' : '⚔️ حمله'} | ⚔️ سرباز: ${troopsCount(hero.troops_data)}/${hero.max_troops}\n`;
+    msg += `🪖 ${troopsText(hero.troops_data)}`;
     const buttons = [];
     buttons.push([
-      { text: hero.is_defender ? '⚔️ حالت حمله' : '🛡 حالت دفاع', callback_data: `hero_def|${hero.id}|${ctx.from.id}` },
-      { text: '⚔️ استخدام سرباز (50💰)', callback_data: `hero_troops|${hero.id}|${ctx.from.id}` }
+      { text: hero.is_defender ? '⚔️ حالت حمله' : '🛡 حالت دفاع', callback_data: `hero_def|${hero.id}|${ctx.from.id}` }
+    ]);
+    buttons.push([
+      { text: `🛡 نیزه‌دار (${TROOP_TYPES.spear.cost}💰)`, callback_data: `recruit_spear|${hero.id}|${ctx.from.id}` },
+      { text: `🏹 کماندار (${TROOP_TYPES.archer.cost}💰)`, callback_data: `recruit_archer|${hero.id}|${ctx.from.id}` }
+    ]);
+    buttons.push([
+      { text: `🐴 شوالیه (${TROOP_TYPES.knight.cost}💰)`, callback_data: `recruit_knight|${hero.id}|${ctx.from.id}` },
+      { text: `🎯 منجنیق (${TROOP_TYPES.catapult.cost}💰)`, callback_data: `recruit_catapult|${hero.id}|${ctx.from.id}` }
     ]);
     if (hero.current_health < t.base_health * hero.level) {
       buttons.push([{ text: '🧪 معجون', callback_data: `use_potion|${hero.id}|${ctx.from.id}` }]);
@@ -69,19 +77,24 @@ module.exports = function registerShop(bot) {
     await ctx.answerCbQuery(!hero.is_defender ? '🛡 برای دفاع تنظیم شد!' : '⚔️ برای حمله تنظیم شد!', { show_alert: true });
   });
 
-  // ═══ استخدام سرباز ═══
-  bot.action(/^hero_troops\|(.+)\|(\d+)$/, async (ctx) => {
+  // ═══ استخدام سرباز متنوع ═══
+  bot.action(/^recruit_(\w+)\|(.+)\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
+    const type = ctx.match[1];
+    const heroId = ctx.match[2];
+    const tt = TROOP_TYPES[type];
+    if (!tt) return;
     const db = getSupabase();
-    const { data: hero } = await db.from('player_characters').select('*').eq('id', ctx.match[1]).maybeSingle();
+    const { data: hero } = await db.from('player_characters').select('*').eq('id', heroId).maybeSingle();
+    if (!hero) return;
     const { data: player } = await db.from('players').select('gold').eq('telegram_id', ctx.from.id).single();
-    const cost = 50;
-    if (player.gold < cost) return ctx.answerCbQuery('❌ سکه کافی نداری! (50)', { show_alert: true });
-    if (hero.troops >= hero.max_troops) return ctx.answerCbQuery('❌ ظرفیت سرباز پره!', { show_alert: true });
-    const add = Math.min(5, hero.max_troops - hero.troops);
-    await db.from('players').update({ gold: player.gold - cost }).eq('telegram_id', ctx.from.id);
-    await db.from('player_characters').update({ troops: hero.troops + add }).eq('id', ctx.match[1]);
-    await ctx.answerCbQuery(`⚔️ +${add} سرباز به قهرمان پیوست!`, { show_alert: true });
+    if (player.gold < tt.cost) return ctx.answerCbQuery(`❌ سکه کافی نداری! (${tt.cost})`, { show_alert: true });
+    const data = hero.troops_data || {};
+    if (troopsCount(data) >= hero.max_troops) return ctx.answerCbQuery('❌ ظرفیت سرباز پره!', { show_alert: true });
+    data[type] = (data[type] || 0) + 1;
+    await db.from('players').update({ gold: player.gold - tt.cost }).eq('telegram_id', ctx.from.id);
+    await db.from('player_characters').update({ troops_data: data }).eq('id', heroId);
+    await ctx.answerCbQuery(`✅ ${tt.name} به قهرمان پیوست!`, { show_alert: true });
   });
 
   bot.action(/^use_potion\|(.+)\|(\d+)$/, async (ctx) => {
@@ -161,7 +174,7 @@ module.exports = function registerShop(bot) {
   async function showMyHeroes(ctx) {
     const db = getSupabase();
     const { data: heroes } = await db.from('player_characters')
-      .select('id, level, current_health, is_defender, troops, template:character_templates (name, base_health, rarity)')
+      .select('id, level, current_health, is_defender, troops_data, template:character_templates (name, base_health, rarity)')
       .eq('telegram_id', ctx.from.id)
       .gt('current_health', 0);
     if (!heroes || heroes.length === 0) return ctx.answerCbQuery('👥 قهرمانی نداری!', { show_alert: true });
