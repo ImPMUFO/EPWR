@@ -25,22 +25,21 @@ module.exports = function registerCosmetics(bot) {
   bot.action(/^skins\|(.+)\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery(); const heroId = ctx.match[1]; const uid = ctx.from.id;
     let msg='🎨 *اسکین‌ها*\n\n'; const buttons=[];
-    for (const [key,s] of Object.entries(SKINS)) { if(key==='none')continue; const bonus=Object.entries(s.bonus).map(([k,v])=>`+${v} ${k==='attack'?'حمله':k==='defense'?'دفاع':'سلامتی'}`).join(' '); msg+=`${s.emoji} *${s.name}* | 💎${s.price_gems} | ${bonus}\n`; buttons.push([{text:`${s.emoji} ${s.name} (💎${s.price_gems})`,callback_data:`buy_skin_${key}|${heroId}|${uid}`}]); }
+    for (const [key,s] of Object.entries(SKINS)) { if(key==='none')continue; const bonus=Object.entries(s.bonus).map(([k,v])=>`+${v} ${k==='attack'?'حمله':k==='defense'?'دفاع':'سلامتی'}`).join(' '); msg+=`${s.emoji} *${s.name}* | 💎${s.price_gems} | ${bonus}\n`; buttons.push([{text:`${s.emoji} ${s.name} (💎${s.price_gems})`,callback_data:`bs_${key}|${heroId}|${uid}`}]); }
     buttons.push([{text:'🔙',callback_data:`cosmetics|${heroId}|${uid}`}]);
     await smartReply(ctx,msg,{parse_mode:'Markdown',reply_markup:{inline_keyboard:buttons}});
   });
-  bot.action(/^buy_skin_(\w+)\|(.+)\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); const r=await applySkin(ctx.from.id,ctx.match[2],ctx.match[1]); await ctx.answerCbQuery(r.success?'✅ اسکین اعمال شد!':r.message,{show_alert:true}); });
+  bot.action(/^bs_(\w+)\|(.+)\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); const r=await applySkin(ctx.from.id,ctx.match[2],ctx.match[1]); await ctx.answerCbQuery(r.success?'✅ اسکین اعمال شد!':r.message,{show_alert:true}); });
 
   bot.action(/^weapons\|(.+)\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery(); const heroId=ctx.match[1]; const uid=ctx.from.id;
     let msg='⚒️ *سلاح‌های آهنگری*\n\n'; const buttons=[];
-    for (const [key,w] of Object.entries(WEAPONS)) { if(key==='none')continue; msg+=`${w.emoji} *${w.name}* | ⚡+${w.power} | ⚙️${w.cost_iron}\n`; buttons.push([{text:`${w.emoji} ${w.name} (⚙️${w.cost_iron})`,callback_data:`craft_weapon_${key}|${heroId}|${uid}`}]); }
+    for (const [key,w] of Object.entries(WEAPONS)) { if(key==='none')continue; msg+=`${w.emoji} *${w.name}* | ⚡+${w.power} | ⚙️${w.cost_iron}\n`; buttons.push([{text:`${w.emoji} ${w.name} (⚙️${w.cost_iron})`,callback_data:`cw_${key}|${heroId}|${uid}`}]); }
     buttons.push([{text:'🔙',callback_data:`cosmetics|${heroId}|${uid}`}]);
     await smartReply(ctx,msg,{parse_mode:'Markdown',reply_markup:{inline_keyboard:buttons}});
   });
-  bot.action(/^craft_weapon_(\w+)\|(.+)\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); const r=await equipWeapon(ctx.from.id,ctx.match[2],ctx.match[1]); await ctx.answerCbQuery(r.success?'✅ سلاح تجهیز شد!':r.message,{show_alert:true}); });
+  bot.action(/^cw_(\w+)\|(.+)\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); const r=await equipWeapon(ctx.from.id,ctx.match[2],ctx.match[1]); await ctx.answerCbQuery(r.success?'✅ سلاح تجهیز شد!':r.message,{show_alert:true}); });
 
-  // ═══ تبدیل پویا (قهرمان‌های مخفی) ═══
   bot.action(/^convert\|(.+)\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery(); const heroId=ctx.match[1]; const uid=ctx.from.id;
     const db=getSupabase();
