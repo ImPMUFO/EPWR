@@ -1,4 +1,5 @@
 const { ADMIN_ID, createGiftCode, getAllGiftCodes, toggleGiftCode, deleteGiftCode, addResources } = require('../../game/gift');
+const { getAllCharacters } = require('../../game/shop');
 const { getSupabase } = require('../../core/supabase');
 const { formatGold, cb } = require('../../core/helpers');
 
@@ -109,27 +110,79 @@ module.exports = function registerAdmin(bot) {
   bot.action(/^admin_sync_groups\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     if (ctx.from.id !== ADMIN_ID) return;
-    
     const db = getSupabase();
     const { data: groups } = await db.from('bot_groups').select('*');
-    
     let msg = `🔄 *گروه‌های ذخیره شده*\n\n`;
     if (!groups || groups.length === 0) {
-      msg += `📭 گروهی ذخیره نشده!\n\n`;
-      msg += `💡 وقتی ربات توی گروه پیامی بگیره، خودکار ذخیره میشه.`;
+      msg += `📭 گروهی ذخیره نشده!\n\n💡 وقتی ربات توی گروه پیامی بگیره، خودکار ذخیره میشه.`;
     } else {
       msg += `👥 تعداد: ${groups.length}\n\n`;
-      groups.forEach(g => {
-        msg += `• ${g.group_name || 'بدون نام'} (${g.group_id})\n`;
-      });
+      groups.forEach(g => { msg += `• ${g.group_name || 'بدون نام'} (${g.group_id})\n`; });
     }
-    
-    await ctx.editMessageText(msg, {
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: cb('admin', ctx.from.id) }]] }
-    });
+    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: cb('admin', ctx.from.id) }]] } });
   });
 
+  // ═══ تنظیم تصاویر ═══
+  bot.action(/^admin_images\|(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    if (ctx.from.id !== ADMIN_ID) return;
+    const chars = await getAllCharacters();
+    const uid = ctx.from.id;
+    let msg = '🖼 *تنظیم تصاویر*\n\nبرای کدوم تصویر بفرست؟\n\n';
+    const buttons = [];
+    chars.forEach((c, i) => {
+      msg += `${i + 1}. ${c.name} ${c.image_url ? '🖼 دارد' : ''}\n`;
+      buttons.push([{ text: `🖼 ${c.name}`, callback_data: `admin_img_hero_${i}|${uid}` }]);
+    });
+    buttons.push([{ text: '🏰 پس‌زمینه قلمرو', callback_data: cb('admin_img_realm', uid) }]);
+    buttons.push([{ text: '🔙', callback_data: cb('admin', uid) }]);
+    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+  });
+
+  bot.action(/^admin_img_hero_(\d+)\|(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    if (ctx.from.id !== ADMIN_ID) return;
+    const state = getState(ctx.from.id);
+    state.step = 'img_hero';
+    state.data = { index: parseInt(ctx.match[1]) };
+    await ctx.reply('📸 حالا تصویر پیکسلی این قهرمان رو برام بفرست:');
+  });
+
+  bot.action(/^admin_img_realm\|(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    if (ctx.from.id !== ADMIN_ID) return;
+    const state = getState(ctx.from.id);
+    state.step = 'img_realm';
+    state.data = {};
+    await ctx.reply('📸 حالا تصویر پس‌زمینه قلمرو رو برام بفرست:');
+  });
+
+  // ═══ دریافت عکس از ادمین ═══
+  bot.on('photo', async (ctx, next) => {
+    if (ctx.from.id !== ADMIN_ID) return next();
+    const state = getState(ctx.from.id);
+    if (!state.step || !state.step.startsWith('img_')) return next();
+
+    const photo = ctx.message.photo;
+    const fileId = photo[photo.length - 1].file_id;
+    const db = getSupabase();
+
+    if (state.step === 'img_hero') {
+      const chars = await getAllCharacters();
+      const tpl = chars[state.data.index];
+      if (tpl) {
+        await db.from('character_templates').update({ image_url: fileId }).eq('id', tpl.id);
+        await ctx.reply(`✅ تصویر *${tpl.name}* ذخیره شد!`, { parse_mode: 'Markdown' });
+      }
+    } else if (state.step === 'img_realm') {
+      await db.from('bot_assets').upsert({ key: 'realm_bg', file_id: fileId });
+      await ctx.reply('✅ پس‌زمینه قلمرو ذخیره شد!');
+    }
+
+    clearState(ctx.from.id);
+  });
+
+  // ═══ دریافت متن ═══
   bot.on('text', async (ctx, next) => {
     if (ctx.from.id !== ADMIN_ID) return next();
     const state = getState(ctx.from.id);
@@ -253,28 +306,18 @@ module.exports = function registerAdmin(bot) {
     if (ctx.from.id !== ADMIN_ID) return;
     const state = getState(ctx.from.id);
     if (state.step !== 'broadcast_confirm') return;
-
     const db = getSupabase();
     clearState(ctx.from.id);
-
     const { data: players } = await db.from('players').select('telegram_id');
     let sentUsers = 0, failedUsers = 0;
     for (const p of players || []) {
-      try {
-        await ctx.telegram.sendMessage(p.telegram_id, state.data.message);
-        sentUsers++;
-      } catch(e) { failedUsers++; }
+      try { await ctx.telegram.sendMessage(p.telegram_id, state.data.message); sentUsers++; } catch(e) { failedUsers++; }
     }
-
     const { data: groups } = await db.from('bot_groups').select('group_id, group_name');
     let sentGroups = 0, failedGroups = 0;
     for (const g of groups || []) {
-      try {
-        await ctx.telegram.sendMessage(g.group_id, state.data.message);
-        sentGroups++;
-      } catch(e) { failedGroups++; }
+      try { await ctx.telegram.sendMessage(g.group_id, state.data.message); sentGroups++; } catch(e) { failedGroups++; }
     }
-
     await ctx.reply(`📢 *پیام فرستاده شد!*\n\n👤 کاربران:\n✅ ارسال: ${sentUsers}\n❌ ناموفق: ${failedUsers}\n\n👥 گروه‌ها:\n✅ ارسال: ${sentGroups}\n❌ ناموفق: ${failedGroups}`, { parse_mode: 'Markdown' });
     await showAdminPanel(ctx);
   });
@@ -317,7 +360,7 @@ module.exports = function registerAdmin(bot) {
           [{ text: '🎁 هدیه به همه', callback_data: cb('admin_gift_all', uid) }],
           [{ text: '📢 پیام همگانی', callback_data: cb('admin_broadcast', uid) }],
           [{ text: '📊 آمار', callback_data: cb('admin_stats', uid) }],
-          [{ text: '🔄 گروه‌ها', callback_data: cb('admin_sync_groups', uid) }],
+          [{ text: '🔄 گروه‌ها', callback_data: cb('admin_sync_groups', uid) }, { text: '🖼 تنظیم تصاویر', callback_data: cb('admin_images', uid) }],
           [{ text: '🔙 بازگشت', callback_data: cb('mainmenu', uid) }]
         ]
       }
