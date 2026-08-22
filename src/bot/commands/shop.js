@@ -35,12 +35,12 @@ module.exports = function registerShop(bot) {
   bot.command('myheroes', async (ctx) => { await showMyHeroes(ctx); });
   bot.action(/^myheroes\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showMyHeroes(ctx); });
 
-  // ═══ جزئیات قهرمان (با دفاع/سرباز متنوع) ═══
+  // ═══ جزئیات قهرمان (با تصویر + دفاع/سرباز) ═══
   bot.action(/^hero\|(.+)\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const db = getSupabase();
     const { data: hero } = await db.from('player_characters')
-      .select('id, level, current_health, xp, is_defender, troops_data, max_troops, template:character_templates (id, name, base_attack, base_defense, base_health, rarity)')
+      .select('id, level, current_health, xp, is_defender, troops_data, max_troops, template:character_templates (id, name, base_attack, base_defense, base_health, rarity, image_url)')
       .eq('id', ctx.match[1]).single();
     if (!hero) return;
     const t = hero.template;
@@ -50,7 +50,8 @@ module.exports = function registerShop(bot) {
     msg += `🪖 ${troopsText(hero.troops_data)}`;
     const buttons = [];
     buttons.push([
-      { text: hero.is_defender ? '⚔️ حالت حمله' : '🛡 حالت دفاع', callback_data: `hero_def|${hero.id}|${ctx.from.id}` }
+      { text: hero.is_defender ? '⚔️ حالت حمله' : '🛡 حالت دفاع', callback_data: `hero_def|${hero.id}|${ctx.from.id}` },
+      { text: '🎭 ظاهر و سلاح', callback_data: `cosmetics|${hero.id}|${ctx.from.id}` }
     ]);
     buttons.push([
       { text: `🛡 نیزه‌دار (${TROOP_TYPES.spear.cost}💰)`, callback_data: `recruit_spear|${hero.id}|${ctx.from.id}` },
@@ -64,10 +65,24 @@ module.exports = function registerShop(bot) {
       buttons.push([{ text: '🧪 معجون', callback_data: `use_potion|${hero.id}|${ctx.from.id}` }]);
     }
     buttons.push([{ text: '👥 قهرمانان', callback_data: cb('myheroes', ctx.from.id) }, { text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]);
-    await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+    const markup = { inline_keyboard: buttons };
+
+    // ═══ تصویر (URL یا file_id تلگرام) ═══
+    if (t.image_url) {
+      try {
+        await ctx.editMessageMedia({ type: 'photo', media: t.image_url, caption: msg, parse_mode: 'Markdown' }, { reply_markup: markup });
+      } catch(e) {
+        try {
+          await ctx.telegram.sendPhoto(ctx.chat.id, t.image_url, { caption: msg, parse_mode: 'Markdown', reply_markup: markup });
+        } catch(e2) {
+          await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: markup });
+        }
+      }
+    } else {
+      await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: markup });
+    }
   });
 
-  // ═══ تغییر حالت دفاع/حمله ═══
   bot.action(/^hero_def\|(.+)\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const db = getSupabase();
@@ -77,7 +92,6 @@ module.exports = function registerShop(bot) {
     await ctx.answerCbQuery(!hero.is_defender ? '🛡 برای دفاع تنظیم شد!' : '⚔️ برای حمله تنظیم شد!', { show_alert: true });
   });
 
-  // ═══ استخدام سرباز متنوع ═══
   bot.action(/^recruit_(\w+)\|(.+)\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const type = ctx.match[1];
