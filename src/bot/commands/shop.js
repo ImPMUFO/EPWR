@@ -2,6 +2,7 @@ const { getOrCreatePlayer } = require('../../game/player');
 const { getAllCharacters, getAllItems, getCharacterById, getItemById, purchaseCharacter, purchaseItem, usePotion, getPlayerItems } = require('../../game/shop');
 const { getSupabase } = require('../../core/supabase');
 const { TROOP_TYPES, troopsCount, troopsText, heroMaxTroops } = require('../../game/troops');
+const { processHeroRest, getBarracksLevel } = require('../../game/rest');
 const { rarityEmoji, formatGold, smartReply, cb } = require('../../core/helpers');
 
 module.exports = function registerShop(bot) {
@@ -34,18 +35,27 @@ module.exports = function registerShop(bot) {
     await ctx.answerCbQuery();
     const db = getSupabase();
     const { data: hero } = await db.from('player_characters')
-      .select('id, level, current_health, xp, is_defender, troops_data, troop_level, template:character_templates (id, name, base_attack, base_defense, base_health, rarity, image_url, troop_type, troop_power, troops_per_level)')
+      .select('id, level, current_health, xp, is_defender, troops_data, troop_level, template:character_templates (id, name, base_attack, base_defense, base_health, rarity, image_url, troop_type, troop_power, troops_per_level, required_barracks)')
       .eq('id', ctx.match[1]).single();
     if (!hero) return;
     const t = hero.template;
     const hp = Math.floor((hero.current_health / (t.base_health * hero.level)) * 100);
     const troop = TROOP_TYPES[t.troop_type] || TROOP_TYPES.spear;
     const troopUpCost = (hero.troop_level || 1) * 150;
+    const barracks = await getBarracksLevel(ctx.from.id);
 
     let msg = `${rarityEmoji(t.rarity)} *${t.name}* Lv.${hero.level}\n❤ ${hp}% | 🗡${t.base_attack} 🛡${t.base_defense}\n`;
     msg += `${hero.is_defender ? '🛡 دفاعی' : '⚔️ حمله'}\n`;
     msg += `🪖 سرباز: ${troop.name} ×${troopsCount(hero.troops_data)}/${heroMaxTroops(hero)}\n`;
     msg += `⚡ قدرت سرباز: ${t.troop_power}×Lv.${hero.troop_level || 1}`;
+    if (hero.current_health === 0) {
+      const req = t.required_barracks || 1;
+      if (barracks === 0) msg += `\n⚠️ پادگان نداری! بسازش تا قهرمان برگرده.`;
+      else if (barracks < req) msg += `\n⚠️ پادگان Lv.${req} لازمه! (داری: Lv.${barracks})`;
+      else msg += `\n🛌 در حال استراحت در پادگان...`;
+    } else {
+      msg += `\n🏰 پادگان لازم: Lv.${t.required_barracks || 1}`;
+    }
 
     const buttons = [];
     buttons.push([
@@ -54,7 +64,7 @@ module.exports = function registerShop(bot) {
     ]);
     buttons.push([{ text: `🪖 استخدام ${troop.name} (${troop.cost}💰)`, callback_data: `recruit|${hero.id}|${ctx.from.id}` }]);
     buttons.push([{ text: `⬆️ ارتقای سرباز (${troopUpCost}💰)`, callback_data: `troop_up|${hero.id}|${ctx.from.id}` }]);
-    if (hero.current_health < t.base_health * hero.level) buttons.push([{ text: '🧪 معجون', callback_data: `use_potion|${hero.id}|${ctx.from.id}` }]);
+    if (hero.current_health > 0 && hero.current_health < t.base_health * hero.level) buttons.push([{ text: '🧪 معجون', callback_data: `use_potion|${hero.id}|${ctx.from.id}` }]);
     buttons.push([{ text: '👥 قهرمانان', callback_data: cb('myheroes', ctx.from.id) }, { text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]);
     const markup = { inline_keyboard: buttons };
 
@@ -81,6 +91,7 @@ module.exports = function registerShop(bot) {
     const db = getSupabase();
     const { data: hero } = await db.from('player_characters').select('*, template:character_templates (troop_type, troop_power, troops_per_level)').eq('id', ctx.match[1]).maybeSingle();
     if (!hero) return;
+    if (hero.current_health === 0) return ctx.answerCbQuery('❌ قهرمان در حال استراحته!', { show_alert: true });
     const tt = TROOP_TYPES[hero.template.troop_type] || TROOP_TYPES.spear;
     const { data: player } = await db.from('players').select('gold').eq('telegram_id', ctx.from.id).single();
     if (player.gold < tt.cost) return ctx.answerCbQuery(`❌ سکه کافی نداری! (${tt.cost})`, { show_alert: true });
@@ -132,9 +143,9 @@ module.exports = function registerShop(bot) {
       msg += `🎭 *قهرمانان* (1/2)\n💡 هر قهرمان فقط یک بار قابل خریده!\n\n`;
       for (let i = 0; i < chars.length; i += 2) {
         const row = [];
-        const c1 = chars[i]; const price1 = c1.price_gold > 0 ? `💰${c1.price_gold}` : `💎${c1.price_gems}`;
-        row.push({ text: `${rarityEmoji(c1.rarity)} ${c1.name} ${price1}`, callback_data: `buy_char|${c1.id}|${uid}` });
-        if (i + 1 < chars.length) { const c2 = chars[i + 1]; const price2 = c2.price_gold > 0 ? `💰${c2.price_gold}` : `💎${c2.price_gems}`; row.push({ text: `${rarityEmoji(c2.rarity)} ${c2.name} ${price2}`, callback_data: `buy_char|${c2.id}|${uid}` }); }
+        const c1 = chars[i]; const p1 = c1.price_gold > 0 ? `💰${c1.price_gold}` : `💎${c1.price_gems}`;
+        row.push({ text: `${rarityEmoji(c1.rarity)} ${c1.name} ${p1}`, callback_data: `buy_char|${c1.id}|${uid}` });
+        if (i + 1 < chars.length) { const c2 = chars[i + 1]; const p2 = c2.price_gold > 0 ? `💰${c2.price_gold}` : `💎${c2.price_gems}`; row.push({ text: `${rarityEmoji(c2.rarity)} ${c2.name} ${p2}`, callback_data: `buy_char|${c2.id}|${uid}` }); }
         buttons.push(row);
       }
     } else {
@@ -158,16 +169,24 @@ module.exports = function registerShop(bot) {
   }
 
   async function showMyHeroes(ctx) {
+    await processHeroRest(ctx.from.id);
     const db = getSupabase();
-    const { data: heroes } = await db.from('player_characters').select('id, level, current_health, is_defender, troops_data, template:character_templates (name, base_health, rarity)').eq('telegram_id', ctx.from.id).gt('current_health', 0);
+    const { data: heroes } = await db.from('player_characters')
+      .select('id, level, current_health, rest_until, is_defender, troops_data, template:character_templates (name, base_health, rarity, required_barracks)')
+      .eq('telegram_id', ctx.from.id);
     if (!heroes || heroes.length === 0) return ctx.answerCbQuery('👥 قهرمانی نداری!', { show_alert: true });
     const uid = ctx.from.id;
     let msg = '👥 *قهرمانان*\n\n'; const buttons = [];
     for (let i = 0; i < heroes.length; i += 2) {
       const row = [];
-      const h1 = heroes[i]; const hp1 = Math.floor((h1.current_health / (h1.template.base_health * h1.level)) * 100);
-      row.push({ text: `${h1.is_defender ? '🛡' : '⚔️'} ${h1.template.name} ❤${hp1}%`, callback_data: `hero|${h1.id}|${uid}` });
-      if (i + 1 < heroes.length) { const h2 = heroes[i + 1]; const hp2 = Math.floor((h2.current_health / (h2.template.base_health * h2.level)) * 100); row.push({ text: `${h2.is_defender ? '🛡' : '⚔️'} ${h2.template.name} ❤${hp2}%`, callback_data: `hero|${h2.id}|${uid}` }); }
+      const h1 = heroes[i];
+      const s1 = h1.current_health > 0 ? `${h1.is_defender ? '🛡' : '⚔️'} ${h1.template.name} ❤${Math.floor((h1.current_health / (h1.template.base_health * h1.level)) * 100)}%` : `🛌 ${h1.template.name}`;
+      row.push({ text: s1, callback_data: `hero|${h1.id}|${uid}` });
+      if (i + 1 < heroes.length) {
+        const h2 = heroes[i + 1];
+        const s2 = h2.current_health > 0 ? `${h2.is_defender ? '🛡' : '⚔️'} ${h2.template.name} ❤${Math.floor((h2.current_health / (h2.template.base_health * h2.level)) * 100)}%` : `🛌 ${h2.template.name}`;
+        row.push({ text: s2, callback_data: `hero|${h2.id}|${uid}` });
+      }
       buttons.push(row);
     }
     buttons.push([{ text: '🛒 فروشگاه', callback_data: cb('shop', uid) }, { text: '🔙', callback_data: cb('mainmenu', uid) }]);
