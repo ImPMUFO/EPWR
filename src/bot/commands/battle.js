@@ -1,4 +1,4 @@
-const { getSession, clearSession, getPlayerHeroes, getBotRealms, getDefeatedNPCs, calcTeamPower, fightNPC } = require('../../game/battle');
+const { getSession, clearSession, getAttackHeroes, getBotRealms, getDefeatedNPCs, calcTeamPower, fightNPC } = require('../../game/battle');
 const { smartReply, cb } = require('../../core/helpers');
 
 module.exports = function registerBattle(bot) {
@@ -90,9 +90,10 @@ module.exports = function registerBattle(bot) {
     await ctx.editMessageText(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '⚔️ دوباره', callback_data: cb('battle', ctx.from.id) }], [{ text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]] } });
   });
 
+  // ═══ انتخاب قهرمان (فقط حمله) ═══
   async function showHeroSelection(ctx) {
-    const heroes = await getPlayerHeroes(ctx.from.id);
-    if (heroes.length === 0) return ctx.answerCbQuery('❌ قهرمان نداری!', { show_alert: true });
+    const heroes = await getAttackHeroes(ctx.from.id);
+    if (heroes.length === 0) return ctx.answerCbQuery('❌ قهرمان حمله‌ای نداری! (شاید همه دفاعی شدن)', { show_alert: true });
     const session = getSession(ctx.from.id);
     const uid = ctx.from.id;
     let msg = `🎯 *انتخاب قهرمان*\n\n`;
