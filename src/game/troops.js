@@ -15,14 +15,12 @@ function troopsText(troopsData) {
   return parts.join(' ') || '—';
 }
 
-// قدرت سرباز خاص هر قهرمان (متفاوت + ضربدر سطح سرباز)
 function heroTroopsPower(hero) {
   const per = (hero.template && hero.template.troop_power) || 2;
   const lvl = hero.troop_level || 1;
   return per * lvl * troopsCount(hero.troops_data);
 }
 
-// حداکثر سرباز بر اساس لول قهرمان
 function heroMaxTroops(hero) {
   return (hero.level || 1) * ((hero.template && hero.template.troops_per_level) || 2);
 }
