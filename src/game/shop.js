@@ -3,7 +3,10 @@ const { updateQuestProgress } = require('./quest');
 
 async function getAllCharacters() {
   const db = getSupabase();
-  const { data } = await db.from('character_templates').select('*').order('price_gold');
+  const { data } = await db.from('character_templates')
+    .select('*')
+    .or('hidden.eq.false,hidden.is.null')
+    .order('price_gold');
   return data || [];
 }
 
@@ -41,7 +44,6 @@ async function purchaseCharacter(telegramId, player, template) {
     telegram_id: telegramId, template_id: template.id,
     level: 1, current_health: template.base_health, xp: 0, is_equipped: false
   });
-  // ═══ آپدیت مأموریت‌ها ═══
   await updateQuestProgress(telegramId, 'buy_hero');
   return { success: true };
 }
@@ -54,7 +56,6 @@ async function purchaseItem(telegramId, player, item) {
 
   const updates = { gold: player.gold - item.price_gold };
 
-  // ═══ اگه منبع هست، مستقیم به دارایی اضافه کن ═══
   if (item.type === 'resource') {
     if (item.name.includes('چوب')) {
       updates.wood = (player.wood || 0) + item.effect_value;
@@ -69,7 +70,6 @@ async function purchaseItem(telegramId, player, item) {
 
   await db.from('players').update(updates).eq('telegram_id', telegramId);
 
-  // فقط آیتم‌های غیر منبع رو به لیست آیتم‌ها اضافه کن
   if (item.type !== 'resource') {
     await db.from('player_items').insert({
       telegram_id: telegramId, item_id: item.id, is_active: item.type === 'generator'
