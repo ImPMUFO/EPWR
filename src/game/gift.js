@@ -1,6 +1,6 @@
 const { getSupabase } = require('../core/supabase');
 
-// ═══ شناسایی مدیر: env → دیتابیس ═══
+// ═══ فقط از env (و در صورت نبود، دیتابیس) ═══
 async function getAdminId() {
   if (process.env.ADMIN_ID) return parseInt(process.env.ADMIN_ID, 10);
   try {
@@ -8,11 +8,6 @@ async function getAdminId() {
     const { data } = await db.from('bot_assets').select('file_id').eq('key', 'admin_id').maybeSingle();
     return data ? parseInt(data.file_id, 10) : 0;
   } catch(e) { return 0; }
-}
-
-async function claimAdmin(telegramId) {
-  const db = getSupabase();
-  await db.from('bot_assets').upsert({ key: 'admin_id', file_id: String(telegramId) });
 }
 
 async function isAdmin(telegramId) {
@@ -84,4 +79,4 @@ async function redeemGiftCode(telegramId, codeText) {
   return { success: true, gold: code.gold_reward || 0, gems: code.gems_reward || 0 };
 }
 
-module.exports = { getAdminId, claimAdmin, isAdmin, createGiftCode, getAllGiftCodes, toggleGiftCode, deleteGiftCode, addResources, redeemGiftCode };
+module.exports = { getAdminId, isAdmin, createGiftCode, getAllGiftCodes, toggleGiftCode, deleteGiftCode, addResources, redeemGiftCode };
