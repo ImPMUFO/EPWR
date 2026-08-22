@@ -5,25 +5,20 @@ const { formatGold, cb } = require('../../core/helpers');
 const adminState = new Map();
 function getState(id) { if (!adminState.has(id)) adminState.set(id, { step: null, data: {} }); return adminState.get(id); }
 function clearState(id) { adminState.delete(id); }
-
 async function getChars() { const db = getSupabase(); const { data } = await db.from('character_templates').select('*').order('price_gold'); return data || []; }
 
 module.exports = function registerAdmin(bot) {
 
-  bot.command('admin', async (ctx) => {
-    if (!(await isAdmin(ctx.from.id))) return ctx.reply('⛔ شما دسترسی ندارید!');
-    clearState(ctx.from.id); await showAdminPanel(ctx);
-  });
+  bot.command('admin', async (ctx) => { if (!(await isAdmin(ctx.from.id))) return ctx.reply('⛔ شما دسترسی ندارید!'); clearState(ctx.from.id); await showAdminPanel(ctx); });
   bot.action(/^admin\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; clearState(ctx.from.id); await showAdminPanel(ctx); });
 
-  // ═══ مدیریت قهرمان‌ها ═══
   bot.action(/^admin_heroes\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; await showHeroesList(ctx); });
   bot.action(/^ah_edit_(\d+)\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; await showHeroEdit(ctx, parseInt(ctx.match[1])); });
   bot.action(/^ah_create\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; getState(ctx.from.id).step = 'create_name'; getState(ctx.from.id).data = {}; await ctx.reply('⚜️ نام قهرمان رو تایپ کن:', { reply_markup: { inline_keyboard: [[{ text: 'لغو', callback_data: cb('admin_heroes', ctx.from.id) }]] } }); });
 
   bot.action(/^ah_f_(\w+)_(\d+)\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return;
-    const names = { name:'نام', base_health:'سلامتی', base_attack:'حمله', base_defense:'دفاع', price_gold:'قیمت سکه', price_gems:'قیمت الماس', troop_power:'قدرت سرباز', troops_per_level:'ظرفیت سرباز در لول' };
+    const names = { name:'نام', base_health:'سلامتی', base_attack:'حمله', base_defense:'دفاع', price_gold:'قیمت سکه', price_gems:'قیمت الماس', troop_power:'قدرت سرباز', troops_per_level:'ظرفیت سرباز در لول', required_barracks:'پادگان لازم' };
     getState(ctx.from.id).step = 'edit_field'; getState(ctx.from.id).data = { field: ctx.match[1], idx: parseInt(ctx.match[2]) };
     await ctx.reply(`✏️ ${names[ctx.match[1]] || ctx.match[1]} جدید رو تایپ کن:`);
   });
@@ -43,7 +38,6 @@ module.exports = function registerAdmin(bot) {
   bot.action(/^ah_del_(\d+)\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; const i = ctx.match[1], uid = ctx.from.id; await ctx.reply('⚠️ برای همیشه حذف میشه. مطمئنی؟', { reply_markup: { inline_keyboard: [[{ text:'بله، حذف کن', callback_data:`ah_delconfirm_${i}|${uid}` }],[{ text:'خیر', callback_data:`ah_edit_${i}|${uid}` }]] } }); });
   bot.action(/^ah_delconfirm_(\d+)\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; const chars = await getChars(); const h = chars[parseInt(ctx.match[1])]; const db = getSupabase(); await db.from('player_characters').delete().eq('template_id', h.id); await db.from('character_templates').delete().eq('id', h.id); await ctx.answerCbQuery('حذف شد', { show_alert: true }); await showHeroesList(ctx); });
 
-  // ═══ بقیه ═══
   bot.action(/^admin_create_gift\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; getState(ctx.from.id).step='gift_code'; getState(ctx.from.id).data={}; await ctx.reply('🎁 کد هدیه رو تایپ کن:', { reply_markup: { inline_keyboard: [[{ text:'لغو', callback_data: cb('admin', ctx.from.id) }]] } }); });
   bot.action(/^admin_add_resources\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; getState(ctx.from.id).step='resource_user_id'; getState(ctx.from.id).data={}; await ctx.reply('💰 آیدی عددی کاربر:', { reply_markup: { inline_keyboard: [[{ text:'لغو', callback_data: cb('admin', ctx.from.id) }]] } }); });
   bot.action(/^admin_broadcast\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; getState(ctx.from.id).step='broadcast'; getState(ctx.from.id).data={}; await ctx.reply('📢 پیامت رو تایپ کن:', { reply_markup: { inline_keyboard: [[{ text:'لغو', callback_data: cb('admin', ctx.from.id) }]] } }); });
@@ -79,7 +73,7 @@ module.exports = function registerAdmin(bot) {
 
     if (s.step==='create_name') {
       const db = getSupabase();
-      const { data } = await db.from('character_templates').insert({ name: text, type:'melee', rarity:'common', base_health:100, base_attack:20, base_defense:10, price_gold:500, price_gems:0, troop_type:'spear', troop_power:2, troops_per_level:2, hidden:false }).select().single();
+      const { data } = await db.from('character_templates').insert({ name: text, type:'melee', rarity:'common', base_health:100, base_attack:20, base_defense:10, price_gold:500, price_gems:0, troop_type:'spear', troop_power:2, troops_per_level:2, required_barracks:1, hidden:false }).select().single();
       clearState(ctx.from.id);
       await ctx.reply(`✅ ${text} ساخته شد! حالا مشخصاتش رو تنظیم کن.`);
       const chars = await getChars(); const idx = chars.findIndex(c=>c.id===data.id);
@@ -129,6 +123,7 @@ module.exports = function registerAdmin(bot) {
     msg += `سلامتی:${h.base_health} حمله:${h.base_attack} دفاع:${h.base_defense}\n`;
     msg += `قیمت:💰${h.price_gold} 💎${h.price_gems} | کمیابی:${h.rarity}\n`;
     msg += `نوع:${h.type} | سرباز:${h.troop_type} قدرت:${h.troop_power} ظرفیت/لول:${h.troops_per_level}\n`;
+    msg += `🏰 پادگان لازم: Lv.${h.required_barracks || 1}\n`;
     msg += `وضعیت:${h.hidden?'مخفی':'نمایش'} ${h.image_url?'| 🖼 دارد':''}`;
     await ctx.reply(msg,{parse_mode:'Markdown',reply_markup:{inline_keyboard:[
       [{text:'نام',callback_data:`ah_f_name_${idx}|${uid}`},{text:'سلامتی',callback_data:`ah_f_base_health_${idx}|${uid}`}],
@@ -136,9 +131,9 @@ module.exports = function registerAdmin(bot) {
       [{text:'قیمت سکه',callback_data:`ah_f_price_gold_${idx}|${uid}`},{text:'قیمت الماس',callback_data:`ah_f_price_gems_${idx}|${uid}`}],
       [{text:'کمیابی',callback_data:`ah_rarity_${idx}|${uid}`},{text:'نوع قهرمان',callback_data:`ah_type_${idx}|${uid}`}],
       [{text:'نوع سرباز',callback_data:`ah_troop_${idx}|${uid}`},{text:'قدرت سرباز',callback_data:`ah_f_troop_power_${idx}|${uid}`}],
-      [{text:'ظرفیت سرباز',callback_data:`ah_f_troops_per_level_${idx}|${uid}`},{text:'تصویر',callback_data:`ah_img_${idx}|${uid}`}],
-      [{text:h.hidden?'نمایش در فروشگاه':'مخفی کن',callback_data:`ah_hide_${idx}|${uid}`},{text:'حذف',callback_data:`ah_del_${idx}|${uid}`}],
-      [{text:'بازگشت به لیست',callback_data:cb('admin_heroes',uid)}]
+      [{text:'ظرفیت سرباز',callback_data:`ah_f_troops_per_level_${idx}|${uid}`},{text:'پادگان لازم',callback_data:`ah_f_required_barracks_${idx}|${uid}`}],
+      [{text:'تصویر',callback_data:`ah_img_${idx}|${uid}`},{text:h.hidden?'نمایش در فروشگاه':'مخفی کن',callback_data:`ah_hide_${idx}|${uid}`}],
+      [{text:'حذف',callback_data:`ah_del_${idx}|${uid}`},{text:'بازگشت به لیست',callback_data:cb('admin_heroes',uid)}]
     ]}});
   }
 
