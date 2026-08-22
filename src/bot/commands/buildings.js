@@ -1,4 +1,4 @@
-const { BUILDINGS, getBuildings, getBuilding, buildBuilding, upgradeBuilding, processKitchenProduction, getResName } = require('../../game/buildings');
+const { BUILDINGS, getBuildings, buildBuilding, upgradeBuilding, processKitchenProduction, craftFlour, craftBread, eatBread, getResName } = require('../../game/buildings');
 const { getOrCreatePlayer } = require('../../game/player');
 const { formatGold, smartReply, cb } = require('../../core/helpers');
 
@@ -20,6 +20,47 @@ module.exports = function registerBuildings(bot) {
     if (result.success) await showBuildings(ctx);
   });
 
+  // ═══ زنجیره تولید ═══
+  bot.action(/^production\|(\d+)$/, async (ctx) => { await showProduction(ctx); });
+
+  bot.action(/^craft_flour\|(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const result = await craftFlour(ctx.from.id);
+    await ctx.answerCbQuery(result.success ? '✅ 10 گندم → 5 آرد' : result.message, { show_alert: true });
+    await showProduction(ctx);
+  });
+
+  bot.action(/^craft_bread\|(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const result = await craftBread(ctx.from.id);
+    await ctx.answerCbQuery(result.success ? '✅ 5 آرد → 5 نان' : result.message, { show_alert: true });
+    await showProduction(ctx);
+  });
+
+  bot.action(/^eat_bread\|(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const result = await eatBread(ctx.from.id);
+    await ctx.answerCbQuery(result.success ? '✅ +100 غذا' : result.message, { show_alert: true });
+    await showProduction(ctx);
+  });
+
+  async function showProduction(ctx) {
+    const player = await getOrCreatePlayer(ctx.from);
+    const uid = ctx.from.id;
+    let msg = `🍞 *زنجیره تولید*\n\n`;
+    msg += `🌾 گندم: ${player.wheat || 0}\n`;
+    msg += `🥡 آرد: ${player.flour || 0}\n`;
+    msg += `🍞 نان: ${player.bread || 0}\n\n`;
+    msg += `💡 گندم از 🌾 مزرعه میاد!\n`;
+    msg += `💡 نان رو بفروش یا بخور (+100 غذا)`;
+    await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
+      [{ text: '🌾→🥡 تبدیل (10 گندم)', callback_data: cb('craft_flour', uid) }],
+      [{ text: '🥡→ پخت (5 آرد)', callback_data: cb('craft_bread', uid) }],
+      [{ text: '🍞 خوردن نان (+100🍖)', callback_data: cb('eat_bread', uid) }],
+      [{ text: '🔙', callback_data: cb('buildings', uid) }]
+    ] } });
+  }
+
   async function showBuildings(ctx) {
     const player = await getOrCreatePlayer(ctx.from);
     const buildings = await getBuildings(ctx.from.id);
@@ -36,9 +77,7 @@ module.exports = function registerBuildings(bot) {
     for (const [key, b] of Object.entries(BUILDINGS)) {
       const level = builtMap[key] || 0;
       if (level === 0) {
-        msg += `${b.name}\n`;
-        msg += `   📖 ${b.desc}\n`;
-        msg += `   💵 *هزینه ساخت:*\n`;
+        msg += `${b.name}\n   📖 ${b.desc}\n   💵 *هزینه ساخت:*\n`;
         for (const [res, amount] of Object.entries(b.base_cost)) {
           const have = player[res] || 0;
           const enough = have >= amount ? '✅' : '❌';
@@ -48,8 +87,7 @@ module.exports = function registerBuildings(bot) {
         buttons.push([{ text: `🔨 ساخت ${b.name}`, callback_data: `build|${key}|${uid}` }]);
       } else {
         const isMax = level >= b.max_level;
-        msg += `${b.name} *Lv.${level}*\n`;
-        msg += `   📖 ${b.desc}\n`;
+        msg += `${b.name} *Lv.${level}*\n   📖 ${b.desc}\n`;
         if (!isMax) {
           msg += `   ⬆️ *هزینه ارتقا:*\n`;
           for (const [res, amount] of Object.entries(b.base_cost)) {
@@ -66,12 +104,7 @@ module.exports = function registerBuildings(bot) {
       }
     }
 
-    msg += `💡 *راهنمای منابع:*\n`;
-    msg += `🪵 چوب: از فروشگاه → منابع\n`;
-    msg += `🪨 سنگ: از فروشگاه → منابع\n`;
-    msg += `⚙️ آهن: از فروشگاه → منابع\n`;
-    msg += `💰 سکه: از جنگ و دستگاه‌ها`;
-
+    buttons.push([{ text: '🍞 زنجیره تولید', callback_data: cb('production', uid) }]);
     buttons.push([{ text: '🔙 بازگشت', callback_data: cb('mainmenu', uid) }]);
 
     await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
