@@ -39,18 +39,30 @@ async function getListedHeroIds(telegramId) {
   return listings.filter(l => l.item_type === 'hero').map(l => l.hero_id);
 }
 
+// ═══ خرید با Claim اتمیک (رفع Race Condition) ═══
 async function buyListing(buyerId, listingId) {
   const db = getSupabase();
-  const { data: listing } = await db.from('market_listings').select('*').eq('id', listingId).eq('is_active', true).maybeSingle();
-  if (!listing) return { success: false, message: '❌ دیگه موجود نیست!' };
-  if (listing.seller_id === buyerId) return { success: false, message: '❌ جنس خودته!' };
+
+  const { data: claimed } = await db.from('market_listings')
+    .update({ is_active: false })
+    .eq('id', listingId).eq('is_active', true)
+    .select();
+  if (!claimed || claimed.length === 0) return { success: false, message: '❌ دیگه موجود نیست!' };
+  const listing = claimed[0];
+
+  const revert = async () => { await db.from('market_listings').update({ is_active: true }).eq('id', listingId); };
+
+  if (listing.seller_id === buyerId) { await revert(); return { success: false, message: '❌ جنس خودته!' }; }
+
   const { data: buyer } = await db.from('players').select('*').eq('telegram_id', buyerId).single();
-  if (buyer.gold < listing.price_gold) return { success: false, message: '❌ سکه کافی نداری!' };
+  if (buyer.gold < listing.price_gold) { await revert(); return { success: false, message: '❌ سکه کافی نداری!' }; }
 
   if (listing.item_type === 'resource') {
     const col = colName(listing.resource_type);
     await db.from('players').update({ gold: buyer.gold - listing.price_gold, [col]: (buyer[col] || 0) + listing.amount }).eq('telegram_id', buyerId);
   } else {
+    const { data: hero } = await db.from('player_characters').select('telegram_id').eq('id', listing.hero_id).maybeSingle();
+    if (!hero || hero.telegram_id !== listing.seller_id) { await revert(); return { success: false, message: '❌ قهرمان دیگه در دسترس فروشنده نیست!' }; }
     await db.from('players').update({ gold: buyer.gold - listing.price_gold }).eq('telegram_id', buyerId);
     await db.from('player_characters').update({ telegram_id: buyerId, is_defender: false }).eq('id', listing.hero_id);
   }
@@ -58,13 +70,12 @@ async function buyListing(buyerId, listingId) {
   const { data: seller } = await db.from('players').select('gold').eq('telegram_id', listing.seller_id).single();
   if (seller) await db.from('players').update({ gold: seller.gold + listing.price_gold }).eq('telegram_id', listing.seller_id);
 
-  await db.from('market_listings').update({ is_active: false }).eq('id', listingId);
   return { success: true };
 }
 
 async function cancelListing(telegramId, listingId) {
   const db = getSupabase();
-  const { data: listing } = await db.from('market_listings').select('*').eq('id', listingId).eq('seller_id', telegramId).maybeSingle();
+  const { data: listing } = await db.from('market_listings').select('*').eq('id', listingId).eq('seller_id', telegramId).eq('is_active', true).maybeSingle();
   if (!listing) return { success: false };
   if (listing.item_type === 'resource') {
     const col = colName(listing.resource_type);
