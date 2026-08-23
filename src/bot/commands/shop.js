@@ -31,7 +31,6 @@ module.exports = function registerShop(bot) {
   bot.command('myheroes', async (ctx) => { await showMyHeroes(ctx); });
   bot.action(/^myheroes\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showMyHeroes(ctx); });
 
-  // ═══ جزئیات قهرمان ═══
   bot.action(/^hero\|(.+)\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     const db = getSupabase();
@@ -83,64 +82,71 @@ module.exports = function registerShop(bot) {
   });
 
   bot.action(/^hero_def\|(.+)\|(\d+)$/, async (ctx) => {
-    await ctx.answerCbQuery();
     const db = getSupabase();
     const { data: hero } = await db.from('player_characters').select('is_defender').eq('id', ctx.match[1]).maybeSingle();
-    if (!hero) return;
+    if (!hero) return ctx.answerCbQuery('❌ قهرمان پیدا نشد!', { show_alert: true });
     await db.from('player_characters').update({ is_defender: !hero.is_defender }).eq('id', ctx.match[1]);
     await ctx.answerCbQuery(!hero.is_defender ? '🛡 برای دفاع تنظیم شد!' : '⚔️ برای حمله تنظیم شد!', { show_alert: true });
   });
 
-  // ═══ ارتقای قهرمان (سطح بالاتر = قدرت و ظرفیت بیشتر) ═══
+  // ═══ ارتقای قهرمان (فقط یک جواب!) ═══
   bot.action(/^hero_up\|(.+)\|(\d+)$/, async (ctx) => {
-    await ctx.answerCbQuery();
-    const db = getSupabase();
-    const { data: hero } = await db.from('player_characters').select('*, template:character_templates (base_health)').eq('id', ctx.match[1]).maybeSingle();
-    if (!hero) return;
-    const cost = hero.level * 200;
-    const { data: player } = await db.from('players').select('gold').eq('telegram_id', ctx.from.id).single();
-    if (player.gold < cost) return ctx.answerCbQuery(`❌ سکه کافی نداری! (${cost})`, { show_alert: true });
-    const newLevel = hero.level + 1;
-    const newHp = hero.current_health > 0 ? Math.min(hero.current_health + hero.template.base_health, hero.template.base_health * newLevel) : 0;
-    await db.from('players').update({ gold: player.gold - cost }).eq('telegram_id', ctx.from.id);
-    await db.from('player_characters').update({ level: newLevel, current_health: newHp }).eq('id', ctx.match[1]);
-    await ctx.answerCbQuery(`✅ قهرمان شد Lv.${newLevel}! قدرت و ظرفیت سرباز بیشتر شد.`, { show_alert: true });
+    try {
+      const db = getSupabase();
+      const { data: hero } = await db.from('player_characters').select('*, template:character_templates (base_health)').eq('id', ctx.match[1]).maybeSingle();
+      if (!hero) return ctx.answerCbQuery('❌ قهرمان پیدا نشد!', { show_alert: true });
+      const cost = hero.level * 200;
+      const { data: player } = await db.from('players').select('gold').eq('telegram_id', ctx.from.id).single();
+      if (player.gold < cost) return ctx.answerCbQuery(`❌ سکه کافی نداری!\nنیاز: ${cost} | داری: ${player.gold}`, { show_alert: true });
+      const newLevel = hero.level + 1;
+      const newHp = hero.current_health > 0 ? Math.min(hero.current_health + hero.template.base_health, hero.template.base_health * newLevel) : 0;
+      await db.from('players').update({ gold: player.gold - cost }).eq('telegram_id', ctx.from.id);
+      await db.from('player_characters').update({ level: newLevel, current_health: newHp }).eq('id', ctx.match[1]);
+      await ctx.answerCbQuery(`✅ قهرمان شد Lv.${newLevel}!\nقدرت و ظرفیت سرباز بیشتر شد.`, { show_alert: true });
+    } catch(e) {
+      await ctx.answerCbQuery('⚠️ خطا: ' + e.message, { show_alert: true });
+    }
   });
 
   // ═══ افزایش سرباز ═══
   bot.action(/^recruit\|(.+)\|(\d+)$/, async (ctx) => {
-    await ctx.answerCbQuery();
-    const db = getSupabase();
-    const { data: hero } = await db.from('player_characters').select('*, template:character_templates (troop_type, troop_power, troops_per_level)').eq('id', ctx.match[1]).maybeSingle();
-    if (!hero) return;
-    if (hero.current_health === 0) return ctx.answerCbQuery('❌ قهرمان در حال استراحته!', { show_alert: true });
-    const tt = TROOP_TYPES[hero.template.troop_type] || TROOP_TYPES.spear;
-    const { data: player } = await db.from('players').select('gold').eq('telegram_id', ctx.from.id).single();
-    if (player.gold < tt.cost) return ctx.answerCbQuery(`❌ سکه کافی نداری! (${tt.cost})`, { show_alert: true });
-    const data = hero.troops_data || {};
-    if (troopsCount(data) >= heroMaxTroops(hero)) return ctx.answerCbQuery('❌ ظرفیت پره! اول قهرمان رو ارتقا بده.', { show_alert: true });
-    data[hero.template.troop_type] = (data[hero.template.troop_type] || 0) + 1;
-    await db.from('players').update({ gold: player.gold - tt.cost }).eq('telegram_id', ctx.from.id);
-    await db.from('player_characters').update({ troops_data: data }).eq('id', ctx.match[1]);
-    await ctx.answerCbQuery(`✅ +1 ${tt.name}! قدرت جنگت بیشتر شد.`, { show_alert: true });
+    try {
+      const db = getSupabase();
+      const { data: hero } = await db.from('player_characters').select('*, template:character_templates (troop_type, troop_power, troops_per_level)').eq('id', ctx.match[1]).maybeSingle();
+      if (!hero) return ctx.answerCbQuery('❌ قهرمان پیدا نشد!', { show_alert: true });
+      if (hero.current_health === 0) return ctx.answerCbQuery('❌ قهرمان در حال استراحته!', { show_alert: true });
+      const tt = TROOP_TYPES[hero.template.troop_type] || TROOP_TYPES.spear;
+      const { data: player } = await db.from('players').select('gold').eq('telegram_id', ctx.from.id).single();
+      if (player.gold < tt.cost) return ctx.answerCbQuery(`❌ سکه کافی نداری!\nنیاز: ${tt.cost} | داری: ${player.gold}`, { show_alert: true });
+      const data = hero.troops_data || {};
+      if (troopsCount(data) >= heroMaxTroops(hero)) return ctx.answerCbQuery('❌ ظرفیت پره! اول قهرمان رو ارتقا بده.', { show_alert: true });
+      data[hero.template.troop_type] = (data[hero.template.troop_type] || 0) + 1;
+      await db.from('players').update({ gold: player.gold - tt.cost }).eq('telegram_id', ctx.from.id);
+      await db.from('player_characters').update({ troops_data: data }).eq('id', ctx.match[1]);
+      await ctx.answerCbQuery(`✅ +1 ${tt.name}!\nقدرت جنگت بیشتر شد.`, { show_alert: true });
+    } catch(e) {
+      await ctx.answerCbQuery('⚠️ خطا: ' + e.message, { show_alert: true });
+    }
   });
 
-  // ═══ ارتقای سرباز (قدرت هر سرباز بیشتر میشه) ═══
+  // ═══ ارتقای سرباز ═══
   bot.action(/^troop_up\|(.+)\|(\d+)$/, async (ctx) => {
-    await ctx.answerCbQuery();
-    const db = getSupabase();
-    const { data: hero } = await db.from('player_characters').select('*').eq('id', ctx.match[1]).maybeSingle();
-    if (!hero) return;
-    const cost = (hero.troop_level || 1) * 150;
-    const { data: player } = await db.from('players').select('gold').eq('telegram_id', ctx.from.id).single();
-    if (player.gold < cost) return ctx.answerCbQuery(`❌ سکه کافی نداری! (${cost})`, { show_alert: true });
-    await db.from('players').update({ gold: player.gold - cost }).eq('telegram_id', ctx.from.id);
-    await db.from('player_characters').update({ troop_level: (hero.troop_level || 1) + 1 }).eq('id', ctx.match[1]);
-    await ctx.answerCbQuery(`✅ قدرت هر سرباز شد ${(hero.troop_level || 1) + 1} برابر!`, { show_alert: true });
+    try {
+      const db = getSupabase();
+      const { data: hero } = await db.from('player_characters').select('*').eq('id', ctx.match[1]).maybeSingle();
+      if (!hero) return ctx.answerCbQuery('❌ قهرمان پیدا نشد!', { show_alert: true });
+      const cost = (hero.troop_level || 1) * 150;
+      const { data: player } = await db.from('players').select('gold').eq('telegram_id', ctx.from.id).single();
+      if (player.gold < cost) return ctx.answerCbQuery(`❌ سکه کافی نداری!\nنیاز: ${cost} | داری: ${player.gold}`, { show_alert: true });
+      await db.from('players').update({ gold: player.gold - cost }).eq('telegram_id', ctx.from.id);
+      await db.from('player_characters').update({ troop_level: (hero.troop_level || 1) + 1 }).eq('id', ctx.match[1]);
+      await ctx.answerCbQuery(`✅ قدرت هر سرباز: ${t => ''}${(hero.troop_level || 1) + 1} برابر شد!`, { show_alert: true });
+    } catch(e) {
+      await ctx.answerCbQuery('⚠️ خطا: ' + e.message, { show_alert: true });
+    }
   });
 
   bot.action(/^use_potion\|(.+)\|(\d+)$/, async (ctx) => {
-    await ctx.answerCbQuery();
     const result = await usePotion(ctx.from.id, ctx.match[1]);
     await ctx.answerCbQuery(result.success ? `✅ ❤${result.newHp}` : result.message, { show_alert: true });
   });
