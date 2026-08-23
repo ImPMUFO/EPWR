@@ -1,14 +1,14 @@
 const { getSupabase } = require('../core/supabase');
 const { getAttackHeroes, getDefenderHeroes } = require('./battle');
 const { getDefenseBonus } = require('./buildings');
-const { heroTroopsPower } = require('./troops');
+const { heroTroopsPower, heroStats } = require('./troops');
 const { addNotification } = require('./notification');
 const { addPlayerXp, xpForActivity } = require('./xp');
 const { sendToRest } = require('./rest');
 
 async function findPvPTargets(a){const db=getSupabase();const{data}=await db.from('players').select('telegram_id, commander_name, level, gold').neq('telegram_id',a).gt('level',0).limit(5);return data||[];}
 
-function calcPower(hs){return hs.reduce((s,h)=>s+h.template.base_attack+h.template.base_defense+h.level*5+heroTroopsPower(h),0);}
+function calcPower(hs){return hs.reduce((s,h)=>{const st=heroStats(h);return s+st.attack+st.defense+h.level*5+heroTroopsPower(h);},0);}
 
 async function executePvP(attackerId, defenderId, selectedHeroIds) {
   const db=getSupabase();
