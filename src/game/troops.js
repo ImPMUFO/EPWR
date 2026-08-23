@@ -1,3 +1,5 @@
+const { skinBonus, weaponPower } = require('./cosmetics');
+
 const TROOP_TYPES = {
   spear: { name: '🛡 نیزه‌دار', power: 2, cost: 30 },
   archer: { name: '🏹 کماندار', power: 3, cost: 50 },
@@ -5,9 +7,7 @@ const TROOP_TYPES = {
   catapult: { name: '🎯 منجنیق', power: 8, cost: 200 }
 };
 
-function troopsCount(troopsData) {
-  return Object.values(troopsData || {}).reduce((a, b) => a + b, 0);
-}
+function troopsCount(troopsData) { return Object.values(troopsData || {}).reduce((a, b) => a + b, 0); }
 
 function troopsText(troopsData) {
   const parts = [];
@@ -25,4 +25,16 @@ function heroMaxTroops(hero) {
   return (hero.level || 1) * ((hero.template && hero.template.troops_per_level) || 2);
 }
 
-module.exports = { TROOP_TYPES, troopsCount, troopsText, heroTroopsPower, heroMaxTroops };
+// ═══ آمار مؤثر: با رشد سطح + اسکین + سلاح ═══
+function heroStats(hero) {
+  const t = hero.template || {};
+  const lv = hero.level || 1;
+  const sb = skinBonus(hero.skin);
+  return {
+    attack: (t.base_attack || 0) + (lv - 1) * 3 + (sb.attack || 0) + weaponPower(hero.weapon),
+    defense: (t.base_defense || 0) + (lv - 1) * 2 + (sb.defense || 0),
+    maxHealth: (t.base_health || 100) * lv + (sb.health || 0)
+  };
+}
+
+module.exports = { TROOP_TYPES, troopsCount, troopsText, heroTroopsPower, heroMaxTroops, heroStats };
