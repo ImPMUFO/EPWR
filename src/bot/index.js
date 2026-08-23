@@ -9,6 +9,20 @@ async function getBot() {
   botInstance = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
   botInstance.catch((err) => console.error('Bot error:', err));
 
+  // ═══ محافظ: فقط اولین answerCbQuery اثر کنه (جلوگیری از خطای جواب تکراری) ═══
+  botInstance.use(async (ctx, next) => {
+    if (ctx.callbackQuery) {
+      const orig = ctx.answerCbQuery.bind(ctx);
+      let answered = false;
+      ctx.answerCbQuery = async (...args) => {
+        if (answered) return;
+        answered = true;
+        try { return await orig(...args); } catch(e) { console.error('answerCbQuery error:', e.message); }
+      };
+    }
+    return next();
+  });
+
   // ═══ Middleware: محافظت از منو ═══
   botInstance.use(async (ctx, next) => {
     if (ctx.callbackQuery) {
@@ -29,49 +43,20 @@ async function getBot() {
     if (isBotAdded) {
       try {
         const db = getSupabase();
-        
-        await db.from('bot_groups').upsert({
-          group_id: ctx.chat.id,
-          group_name: ctx.chat.title
-        });
-        
-        const { data: existingAlliance } = await db.from('alliances')
-          .select('id')
-          .eq('linked_group_id', ctx.chat.id)
-          .maybeSingle();
-        
+        await db.from('bot_groups').upsert({ group_id: ctx.chat.id, group_name: ctx.chat.title });
+        const { data: existingAlliance } = await db.from('alliances').select('id').eq('linked_group_id', ctx.chat.id).maybeSingle();
         if (!existingAlliance) {
           const ownerId = ctx.chat.owner_id || ctx.from.id;
           const allianceName = ctx.chat.title || 'اتحاد گروه';
           const allianceTag = (ctx.chat.title || 'GRP').replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toUpperCase() || 'GRP';
-          
-          await db.from('alliances').insert({
-            name: allianceName,
-            tag: allianceTag,
-            description: 'اتحاد ساخته شده از گروه تلگرام',
-            leader_id: ownerId,
-            linked_group_id: ctx.chat.id,
-            linked_group_name: ctx.chat.title
-          });
-          
-          const { data: alliance } = await db.from('alliances')
-            .select('*')
-            .eq('linked_group_id', ctx.chat.id)
-            .single();
-          
+          await db.from('alliances').insert({ name: allianceName, tag: allianceTag, description: 'اتحاد ساخته شده از گروه تلگرام', leader_id: ownerId, linked_group_id: ctx.chat.id, linked_group_name: ctx.chat.title });
+          const { data: alliance } = await db.from('alliances').select('*').eq('linked_group_id', ctx.chat.id).single();
           if (alliance) {
-            await db.from('alliance_members').insert({
-              alliance_id: alliance.id,
-              telegram_id: ownerId,
-              role: 'leader'
-            });
-            
-            await ctx.reply(`🎏 *اتحاد "${alliance.name}" ساخته شد!*\n\n👑 رهبر: مالک گروه\n\nبرای مدیریت اتحاد، /alliance بزنید.`, { parse_mode: 'Markdown' });
+            await db.from('alliance_members').insert({ alliance_id: alliance.id, telegram_id: ownerId, role: 'leader' });
+            await ctx.reply(`🎏 *اتحاد "${alliance.name}" ساخته شد!*\n\n👑 رهبر: مالک گروه`, { parse_mode: 'Markdown' });
           }
         }
-      } catch(e) {
-        console.error('Group to alliance error:', e.message);
-      }
+      } catch(e) { console.error('Group to alliance error:', e.message); }
     }
   });
 
@@ -80,13 +65,8 @@ async function getBot() {
     if (ctx.chat && (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup')) {
       try {
         const db = getSupabase();
-        await db.from('bot_groups').upsert({
-          group_id: ctx.chat.id,
-          group_name: ctx.chat.title
-        });
-      } catch(e) {
-        // ignore
-      }
+        await db.from('bot_groups').upsert({ group_id: ctx.chat.id, group_name: ctx.chat.title });
+      } catch(e) {}
     }
     return next();
   });
@@ -94,15 +74,17 @@ async function getBot() {
   const commands = [
     'start', 'shop', 'battle', 'realm', 'ranking', 'market',
     'settings', 'gift', 'admin', 'pvp', 'alliance', 'quest',
-    'profile', 'notifications', 'buildings', 'guide'
+    'profile', 'notifications', 'buildings', 'guide', 'cosmetics'
   ];
 
   commands.forEach(cmd => {
-    try {
-      require(`./commands/${cmd}`)(botInstance);
-    } catch(e) {
-      console.error(`❌ ${cmd} error:`, e.message);
-    }
+    try { require(`./commands/${cmd}`)(botInstance); }
+    catch(e) { console.error(`❌ ${cmd} error:`, e.message); }
+  });
+
+  // ═══ catch-all: دکمه‌های مرده دیگه بی‌جواب نمونن ═══
+  botInstance.action(/^[\s\S]+$/, async (ctx) => {
+    await ctx.answerCbQuery('⚠️ این دکمه فعلاً کار نمی‌کنه!\nلطفاً /start بزنید.', { show_alert: true });
   });
 
   // ═══ تنظیم دستورات ═══
