@@ -6,16 +6,15 @@ async function getAllCharacters() {
   const { data } = await db.from('character_templates').select('*').or('hidden.eq.false,hidden.is.null').order('price_gold');
   return data || [];
 }
+
 async function getAllItems() { const db = getSupabase(); const { data } = await db.from('shop_items').select('*').order('price_gold'); return data || []; }
 async function getCharacterById(id) { const db = getSupabase(); const { data } = await db.from('character_templates').select('*').eq('id', id).single(); return data; }
 async function getItemById(id) { const db = getSupabase(); const { data } = await db.from('shop_items').select('*').eq('id', id).single(); return data; }
 
 async function purchaseCharacter(telegramId, player, template) {
   const db = getSupabase();
-  // ═══ فقط یک بار قابل خرید ═══
   const { data: owned } = await db.from('player_characters').select('id').eq('telegram_id', telegramId).eq('template_id', template.id).maybeSingle();
   if (owned) return { success: false, message: '❌ این قهرمان رو قبلاً خریدی! فقط قابل ارتقا.' };
-
   if (template.price_gold > 0 && player.gold < template.price_gold) return { success: false, message: `❌ Gold کافی نداری! نیاز: ${template.price_gold}` };
   if (template.price_gems > 0 && player.gems < template.price_gems) return { success: false, message: `❌ Gems کافی نداری! نیاز: ${template.price_gems}` };
   const updates = {};
@@ -29,6 +28,13 @@ async function purchaseCharacter(telegramId, player, template) {
 
 async function purchaseItem(telegramId, player, item) {
   const db = getSupabase();
+
+  // ═══ دستگاه سکه‌ساز: فقط یکی ═══
+  if (item.type === 'generator') {
+    const { data: ownedGen } = await db.from('player_items').select('id').eq('telegram_id', telegramId).eq('item_id', item.id).maybeSingle();
+    if (ownedGen) return { success: false, message: '❌ فقط یک دستگاه می‌تونی داشته باشی!' };
+  }
+
   if (item.price_gold > 0 && player.gold < item.price_gold) return { success: false, message: `❌ Gold کافی نداری! نیاز: ${item.price_gold}` };
   const updates = { gold: player.gold - item.price_gold };
   if (item.type === 'resource') {
