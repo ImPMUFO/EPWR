@@ -1,6 +1,7 @@
 const { Telegraf } = require('telegraf');
 const { isOwner } = require('../core/helpers');
 const { getSupabase } = require('../core/supabase');
+const { processKitchenProduction } = require('../game/buildings');
 
 let botInstance = null;
 
@@ -9,7 +10,7 @@ async function getBot() {
   botInstance = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
   botInstance.catch((err) => console.error('Bot error:', err));
 
-  // ═══ محافظ: فقط اولین answerCbQuery اثر کنه (جلوگیری از خطای جواب تکراری) ═══
+  // ═══ محافظ: فقط اولین answerCbQuery اثر کنه ═══
   botInstance.use(async (ctx, next) => {
     if (ctx.callbackQuery) {
       const orig = ctx.answerCbQuery.bind(ctx);
@@ -19,6 +20,15 @@ async function getBot() {
         answered = true;
         try { return await orig(...args); } catch(e) { console.error('answerCbQuery error:', e.message); }
       };
+    }
+    return next();
+  });
+
+  // ═══ تولید خودکار: روی هر تعامل کاربر، سکه‌ها تا لحظه آخر آپدیت میشن ═══
+  botInstance.use(async (ctx, next) => {
+    const uid = ctx.from && ctx.from.id;
+    if (uid) {
+      try { await processKitchenProduction(uid); } catch(e) {}
     }
     return next();
   });
@@ -82,7 +92,7 @@ async function getBot() {
     catch(e) { console.error(`❌ ${cmd} error:`, e.message); }
   });
 
-  // ═══ catch-all: دکمه‌های مرده دیگه بی‌جواب نمونن ═══
+  // ═══ catch-all: دکمه‌های مرده بی‌جواب نمونن ═══
   botInstance.action(/^[\s\S]+$/, async (ctx) => {
     await ctx.answerCbQuery('⚠️ این دکمه فعلاً کار نمی‌کنه!\nلطفاً /start بزنید.', { show_alert: true });
   });
