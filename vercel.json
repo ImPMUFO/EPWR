@@ -1,9 +1,8 @@
 {
-  "version": 2,
-  "builds": [
-    { "src": "api/webhook.js", "use": "@vercel/node" }
-  ],
-  "routes": [
-    { "src": "/api/webhook", "dest": "api/webhook.js" }
+  "functions": {
+    "api/cron.js": { "maxDuration": 10 }
+  },
+  "crons": [
+    { "path": "/api/cron", "schedule": "* * * * *" }
   ]
 }
