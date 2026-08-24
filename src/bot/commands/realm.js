@@ -1,8 +1,7 @@
 const { getOrCreatePlayer } = require('../../game/player');
-const { collectGold } = require('../../game/realm');
 const { getPlayerHeroes } = require('../../game/battle');
 const { heroStats, heroTroopsPower } = require('../../game/troops');
-const { getDefenseBonus } = require('../../game/buildings');
+const { getDefenseBonus, processKitchenProduction } = require('../../game/buildings');
 const { getPlayerAlliance } = require('../../game/alliance');
 const { processHeroRest } = require('../../game/rest');
 const { getSupabase } = require('../../core/supabase');
@@ -14,9 +13,9 @@ async function getRealmBg() {
   return data?.file_id || null;
 }
 
-// ═══ صفحه یکپارچه قلمرو ═══
 async function showRealm(ctx) {
   await processHeroRest(ctx.from.id);
+  await processKitchenProduction(ctx.from.id);
   const player = await getOrCreatePlayer(ctx.from);
   const heroes = await getPlayerHeroes(ctx.from.id);
   const alliance = await getPlayerAlliance(ctx.from.id);
@@ -62,15 +61,15 @@ module.exports = function registerRealm(bot) {
   bot.command('realm', async (ctx) => { await showRealm(ctx); });
   bot.action(/^realm\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showRealm(ctx); });
 
-  // ═══ جمع‌آوری سکه دستگاه‌ها ═══
   bot.action(/^resources\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
-    const result = await collectGold(ctx.from.id);
-    if (result.totalGold > 0) {
-      await ctx.answerCbQuery(`💰 +${formatGold(result.totalGold)} جمع شد!`, { show_alert: true });
-    } else {
-      await ctx.answerCbQuery('⏳ چیزی نیست! دستگاه‌ها هر ۱۰ دقیقه سکه میدن.', { show_alert: true });
-    }
+    const r = await processKitchenProduction(ctx.from.id);
+    const parts = [];
+    if (r.gold) parts.push(`💰+${r.gold}`);
+    if (r.eggs) parts.push(`🥚+${r.eggs}`);
+    if (r.food) parts.push(`🍖+${r.food}`);
+    if (r.wheat) parts.push(`🌾+${r.wheat}`);
+    await ctx.answerCbQuery(parts.length ? `✅ جمع شد: ${parts.join(' ')}` : '⏳ هنوز چیزی نرسیده! هر دقیقه خودکار آپدیت میشه.', { show_alert: true });
     await showRealm(ctx);
   });
 };
