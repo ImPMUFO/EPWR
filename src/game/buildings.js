@@ -73,27 +73,34 @@ async function getAttackBonus(telegramId) {
   return b;
 }
 
-// ═══ تولید خودکار: هر دقیقه آپدیت میشه ═══
+// ═══ تولید خودکار دقیقه‌ای (با رفع باگ مقداردهی اولیه) ═══
 async function processKitchenProduction(telegramId) {
   const db = getSupabase();
   const now = Date.now();
+  const zeros = { gold: 0, eggs: 0, food: 0, wheat: 0 };
   const { data: player } = await db.from('players').select('*').eq('telegram_id', telegramId).single();
-  if (!player) return { gold: 0, eggs: 0, food: 0, wheat: 0 };
+  if (!player) return zeros;
 
-  const last = new Date(player.last_prod_tick || now).getTime();
+  // ═══ اولین اجرا: فقط زمان شروع رو ثبت کن ═══
+  if (!player.last_prod_tick) {
+    await db.from('players').update({ last_prod_tick: new Date(now).toISOString() }).eq('telegram_id', telegramId);
+    return zeros;
+  }
+
+  const last = new Date(player.last_prod_tick).getTime();
   const elapsedMs = now - last;
-  if (elapsedMs < 60000) return { gold: 0, eggs: 0, food: 0, wheat: 0 };
+  if (elapsedMs < 60000) return zeros;
   const min = Math.floor(elapsedMs / 60000);
   const remainder = elapsedMs % 60000;
 
   const updates = {};
   const out = { gold: 0, eggs: 0, food: 0, wheat: 0 };
 
-  // ⚙️ دستگاه سکه‌ساز (2 سکه در دقیقه)
+  // ⚙️ دستگاه سکه‌ساز (1 سکه در دقیقه)
   const { data: items } = await db.from('player_items').select('id, item:shop_items (type, effect_value)').eq('telegram_id', telegramId).eq('is_active', true);
   const gen = (items || []).find(i => i.item && i.item.type === 'generator');
   if (gen) {
-    out.gold = min * (gen.item.effect_value || 2);
+    out.gold = min * (gen.item.effect_value || 1);
     updates.gold = (player.gold || 0) + out.gold;
   }
 
