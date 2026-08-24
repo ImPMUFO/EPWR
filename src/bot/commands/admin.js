@@ -1,4 +1,5 @@
 const { isAdmin, createGiftCode, getAllGiftCodes, toggleGiftCode, deleteGiftCode, addResources } = require('../../game/gift');
+const { getAllItems } = require('../../game/shop');
 const { getSupabase } = require('../../core/supabase');
 const { formatGold, cb } = require('../../core/helpers');
 
@@ -39,6 +40,30 @@ module.exports = function registerAdmin(bot) {
   bot.action(/^ah_del_(\d+)\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; const i = ctx.match[1], uid = ctx.from.id; await ctx.reply('⚠️ برای همیشه حذف میشه. مطمئنی؟', { reply_markup: { inline_keyboard: [[{ text:'بله، حذف کن', callback_data:`ah_delconfirm_${i}|${uid}` }],[{ text:'خیر', callback_data:`ah_edit_${i}|${uid}` }]] } }); });
   bot.action(/^ah_delconfirm_(\d+)\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; const chars = await getChars(); const h = chars[parseInt(ctx.match[1])]; const db = getSupabase(); await db.from('player_characters').delete().eq('template_id', h.id); await db.from('character_templates').delete().eq('id', h.id); await ctx.answerCbQuery('حذف شد', { show_alert: true }); await showHeroesList(ctx); });
 
+  // ═══ تصویر آیتم‌های فروشگاه ═══
+  bot.action(/^admin_items_img\|(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return;
+    const items = await getAllItems(); const uid = ctx.from.id;
+    let msg = '🛒 *تصویر آیتم‌های فروشگاه*\n\nبرای کدوم تصویر بفرست؟\n\n';
+    const buttons = [];
+    for (let i = 0; i < items.length; i += 2) {
+      const row = [];
+      row.push({ text: items[i].name, callback_data: `ai_img_${i}|${uid}` });
+      if (i + 1 < items.length) row.push({ text: items[i + 1].name, callback_data: `ai_img_${i + 1}|${uid}` });
+      buttons.push(row);
+    }
+    buttons.push([{ text: 'بازگشت', callback_data: cb('admin', uid) }]);
+    await ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+  });
+
+  bot.action(/^ai_img_(\d+)\|(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return;
+    const items = await getAllItems(); const item = items[parseInt(ctx.match[1])];
+    if (!item) return;
+    getState(ctx.from.id).step = 'img_item'; getState(ctx.from.id).data = { itemId: item.id };
+    await ctx.reply(`📸 تصویر ${item.name} رو بفرست:`);
+  });
+
   // ═══ بقیه بخش‌ها ═══
   bot.action(/^admin_create_gift\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; getState(ctx.from.id).step='gift_code'; getState(ctx.from.id).data={}; await ctx.reply('🎁 کد هدیه رو تایپ کن:', { reply_markup: { inline_keyboard: [[{ text:'لغو', callback_data: cb('admin', ctx.from.id) }]] } }); });
   bot.action(/^admin_add_resources\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; getState(ctx.from.id).step='resource_user_id'; getState(ctx.from.id).data={}; await ctx.reply('💰 آیدی عددی کاربر:', { reply_markup: { inline_keyboard: [[{ text:'لغو', callback_data: cb('admin', ctx.from.id) }]] } }); });
@@ -63,6 +88,7 @@ module.exports = function registerAdmin(bot) {
     const fileId = ctx.message.photo[ctx.message.photo.length-1].file_id;
     const db = getSupabase();
     if (s.step==='img_hero') { await db.from('character_templates').update({ image_url: fileId }).eq('id', s.data.heroId); await ctx.reply('✅ تصویر قهرمان ذخیره شد!'); }
+    else if (s.step==='img_item') { await db.from('shop_items').update({ image_url: fileId }).eq('id', s.data.itemId); await ctx.reply('✅ تصویر آیتم ذخیره شد!'); }
     else if (s.step==='img_realm') { await db.from('bot_assets').upsert({ key:'realm_bg', file_id: fileId }); await ctx.reply('✅ پس‌زمینه قلمرو ذخیره شد!'); }
     clearState(ctx.from.id);
   });
@@ -154,6 +180,7 @@ module.exports = function registerAdmin(bot) {
     let msg=`👑 *پنل مدیریت*\n\n👥 بازیکنان:${pc||0}\n\nخوش آمدی!`;
     await ctx.reply(msg,{parse_mode:'Markdown',reply_markup:{inline_keyboard:[
       [{ text:'مدیریت قهرمان‌ها', callback_data: cb('admin_heroes', uid) }],
+      [{ text:'تصویر آیتم‌های فروشگاه', callback_data: cb('admin_items_img', uid) }],
       [{ text:'ساخت کد هدیه', callback_data: cb('admin_create_gift', uid) }],
       [{ text:'لیست کدها', callback_data: cb('admin_list_gifts', uid) }],
       [{ text:'سکه به کاربر', callback_data: cb('admin_add_resources', uid) }],
