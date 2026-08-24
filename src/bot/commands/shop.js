@@ -5,7 +5,7 @@ const { TROOP_TYPES, troopsCount, troopsText, heroMaxTroops, heroStats } = requi
 const { processHeroRest, getBarracksLevel } = require('../../game/rest');
 const { rarityEmoji, formatGold, smartReply, cb } = require('../../core/helpers');
 
-const HERO_SEL = 'id, level, current_health, xp, is_defender, troops_data, troop_level, skin, weapon, template:character_templates (id, name, base_attack, base_defense, base_health, rarity, image_url, troop_type, troop_power, troops_per_level, required_barracks)';
+const HERO_SEL = 'id, level, current_health, xp, is_defender, troops_data, troop_level, skin, weapon, template:character_templates (id, name, emoji, base_attack, base_defense, base_health, rarity, image_url, troop_type, troop_power, troops_per_level, required_barracks)';
 
 module.exports = function registerShop(bot) {
   bot.command('shop', async (ctx) => { await showShop(ctx); });
@@ -110,7 +110,6 @@ module.exports = function registerShop(bot) {
     await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]] } });
   });
 
-  // ═══ نمایش قهرمان با آمار مؤثر + رفرش درجا ═══
   async function renderHero(ctx, heroId) {
     const db = getSupabase();
     const { data: hero } = await db.from('player_characters').select(HERO_SEL).eq('id', heroId).single();
@@ -123,7 +122,7 @@ module.exports = function registerShop(bot) {
     const heroUpCost = hero.level * 200;
     const barracks = await getBarracksLevel(ctx.from.id);
 
-    let msg = `${rarityEmoji(t.rarity)} *${t.name}* Lv.${hero.level}\n❤ ${hp}% | 🗡${st.attack} 🛡${st.defense}\n`;
+    let msg = `${t.emoji || rarityEmoji(t.rarity)} *${t.name}* Lv.${hero.level}\n❤ ${hp}% | 🗡${st.attack} 🛡${st.defense}\n`;
     msg += `${hero.is_defender ? '🛡 دفاعی' : '⚔️ حمله'}\n`;
     msg += `🪖 سرباز: ${troop.name} ×${troopsCount(hero.troops_data)}/${heroMaxTroops(hero)}\n`;
     msg += `⚡ قدرت هر سرباز: ${t.troop_power}×Lv.${hero.troop_level || 1}`;
@@ -132,9 +131,7 @@ module.exports = function registerShop(bot) {
       if (barracks === 0) msg += `\n⚠️ پادگان نداری! بسازش تا قهرمان برگرده.`;
       else if (barracks < req) msg += `\n⚠️ پادگان Lv.${req} لازمه! (داری: Lv.${barracks})`;
       else msg += `\n🛌 در حال استراحت در پادگان...`;
-    } else {
-      msg += `\n🏰 پادگان لازم: Lv.${t.required_barracks || 1}`;
-    }
+    } else msg += `\n🏰 پادگان لازم: Lv.${t.required_barracks || 1}`;
 
     const buttons = [];
     buttons.push([
@@ -172,8 +169,8 @@ module.exports = function registerShop(bot) {
       for (let i = 0; i < chars.length; i += 2) {
         const row = [];
         const c1 = chars[i]; const p1 = c1.price_gold > 0 ? `💰${c1.price_gold}` : `💎${c1.price_gems}`;
-        row.push({ text: `${rarityEmoji(c1.rarity)} ${c1.name} ${p1}`, callback_data: `buy_char|${c1.id}|${uid}` });
-        if (i + 1 < chars.length) { const c2 = chars[i + 1]; const p2 = c2.price_gold > 0 ? `💰${c2.price_gold}` : `💎${c2.price_gems}`; row.push({ text: `${rarityEmoji(c2.rarity)} ${c2.name} ${p2}`, callback_data: `buy_char|${c2.id}|${uid}` }); }
+        row.push({ text: `${c1.emoji || rarityEmoji(c1.rarity)} ${c1.name} ${p1}`, callback_data: `buy_char|${c1.id}|${uid}` });
+        if (i + 1 < chars.length) { const c2 = chars[i + 1]; const p2 = c2.price_gold > 0 ? `💰${c2.price_gold}` : `💎${c2.price_gems}`; row.push({ text: `${c2.emoji || rarityEmoji(c2.rarity)} ${c2.name} ${p2}`, callback_data: `buy_char|${c2.id}|${uid}` }); }
         buttons.push(row);
       }
     } else {
@@ -196,11 +193,12 @@ module.exports = function registerShop(bot) {
     await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
 
+  // ═══ لیست قهرمان‌ها با ایموجی اختصاصی ═══
   async function showMyHeroes(ctx) {
     await processHeroRest(ctx.from.id);
     const db = getSupabase();
     const { data: heroes } = await db.from('player_characters')
-      .select('id, level, current_health, rest_until, is_defender, troops_data, template:character_templates (name, base_health, rarity, required_barracks)')
+      .select('id, level, current_health, rest_until, is_defender, troops_data, template:character_templates (name, emoji, base_health, rarity, required_barracks)')
       .eq('telegram_id', ctx.from.id);
     if (!heroes || heroes.length === 0) return ctx.answerCbQuery('👥 قهرمانی نداری!', { show_alert: true });
     const uid = ctx.from.id;
@@ -208,11 +206,13 @@ module.exports = function registerShop(bot) {
     for (let i = 0; i < heroes.length; i += 2) {
       const row = [];
       const h1 = heroes[i];
-      const s1 = h1.current_health > 0 ? `${h1.is_defender ? '🛡' : '⚔️'} ${h1.template.name} ❤${Math.floor((h1.current_health / (h1.template.base_health * h1.level)) * 100)}%` : `🛌 ${h1.template.name}`;
+      const e1 = h1.template.emoji || '⚔️';
+      const s1 = h1.current_health > 0 ? `${e1}${h1.is_defender ? '🛡' : ''} ${h1.template.name} ❤${Math.floor((h1.current_health / (h1.template.base_health * h1.level)) * 100)}%` : `🛌 ${h1.template.name}`;
       row.push({ text: s1, callback_data: `hero|${h1.id}|${uid}` });
       if (i + 1 < heroes.length) {
         const h2 = heroes[i + 1];
-        const s2 = h2.current_health > 0 ? `${h2.is_defender ? '🛡' : '⚔️'} ${h2.template.name} ❤${Math.floor((h2.current_health / (h2.template.base_health * h2.level)) * 100)}%` : `🛌 ${h2.template.name}`;
+        const e2 = h2.template.emoji || '⚔️';
+        const s2 = h2.current_health > 0 ? `${e2}${h2.is_defender ? '🛡' : ''} ${h2.template.name} ❤${Math.floor((h2.current_health / (h2.template.base_health * h2.level)) * 100)}%` : `🛌 ${h2.template.name}`;
         row.push({ text: s2, callback_data: `hero|${h2.id}|${uid}` });
       }
       buttons.push(row);
