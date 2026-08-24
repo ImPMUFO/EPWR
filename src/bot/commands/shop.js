@@ -3,7 +3,7 @@ const { getAllCharacters, getAllItems, getCharacterById, getItemById, purchaseCh
 const { getSupabase } = require('../../core/supabase');
 const { TROOP_TYPES, troopsCount, troopsText, heroMaxTroops, heroStats } = require('../../game/troops');
 const { processHeroRest, getBarracksLevel } = require('../../game/rest');
-const { rarityEmoji, formatGold, smartReply, cb } = require('../../core/helpers');
+const { rarityEmoji, rarityName, formatGold, smartReply, cb } = require('../../core/helpers');
 
 const HERO_SEL = 'id, level, current_health, xp, is_defender, troops_data, troop_level, skin, weapon, template:character_templates (id, name, emoji, base_attack, base_defense, base_health, rarity, image_url, troop_type, troop_power, troops_per_level, required_barracks)';
 
@@ -12,7 +12,10 @@ module.exports = function registerShop(bot) {
   bot.action(/^shop\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showShop(ctx); });
   bot.action(/^shop_page\|(\d+)\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showShop(ctx, parseInt(ctx.match[1])); });
 
-  bot.action(/^buy_char\|(\d+)\|(\d+)$/, async (ctx) => {
+  // ═══ جزئیات قهرمان قبل از خرید ═══
+  bot.action(/^buy_char\|(\d+)\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showCharDetail(ctx, parseInt(ctx.match[1])); });
+
+  bot.action(/^confirm_char\|(\d+)\|(\d+)$/, async (ctx) => {
     const template = await getCharacterById(parseInt(ctx.match[1]));
     if (!template) return ctx.answerCbQuery('❌ پیدا نشد', { show_alert: true });
     const player = await getOrCreatePlayer(ctx.from);
@@ -21,7 +24,10 @@ module.exports = function registerShop(bot) {
     if (result.success) await showShop(ctx, 1);
   });
 
-  bot.action(/^buy_item\|(\d+)\|(\d+)$/, async (ctx) => {
+  // ═══ جزئیات آیتم قبل از خرید ═══
+  bot.action(/^buy_item\|(\d+)\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showItemDetail(ctx, parseInt(ctx.match[1])); });
+
+  bot.action(/^confirm_item\|(\d+)\|(\d+)$/, async (ctx) => {
     const item = await getItemById(parseInt(ctx.match[1]));
     if (!item) return ctx.answerCbQuery('❌ پیدا نشد', { show_alert: true });
     const player = await getOrCreatePlayer(ctx.from);
@@ -110,6 +116,60 @@ module.exports = function registerShop(bot) {
     await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]] } });
   });
 
+  // ═══ صفحه جزئیات قهرمان (قبل از خرید) ═══
+  async function showCharDetail(ctx, id) {
+    const t = await getCharacterById(id);
+    if (!t) return ctx.answerCbQuery('❌ پیدا نشد', { show_alert: true });
+    const uid = ctx.from.id;
+    const db = getSupabase();
+    const { data: owned } = await db.from('player_characters').select('id').eq('telegram_id', uid).eq('template_id', t.id).maybeSingle();
+    const price = t.price_gold > 0 ? `💰 ${formatGold(t.price_gold)}` : `💎 ${t.price_gems}`;
+
+    let msg = `${t.emoji || '🦸'} *${t.name}*\n${rarityEmoji(t.rarity)} ${rarityName(t.rarity)}\n\n`;
+    msg += `🗡 حمله: ${t.base_attack} | 🛡 دفاع: ${t.base_defense} | ❤ سلامتی: ${t.base_health}\n`;
+    msg += `🪖 سرباز اختصاصی: ${TROOP_TYPES[t.troop_type]?.name || '—'} (قدرت ${t.troop_power || 2})\n`;
+    msg += `🏰 پادگان لازم: Lv.${t.required_barracks || 1}\n\n`;
+    if (t.description) msg += `📖 ${t.description}\n\n`;
+    msg += `💵 قیمت: ${price}`;
+    if (owned) msg += `\n\n✅ این قهرمان رو داری!`;
+
+    const buttons = [];
+    if (!owned) buttons.push([{ text: '✅ خرید', callback_data: `confirm_char|${t.id}|${uid}` }]);
+    buttons.push([{ text: '🔙 بازگشت', callback_data: cb('shop', uid) }]);
+    const markup = { inline_keyboard: buttons };
+
+    if (t.image_url) {
+      try { await ctx.telegram.sendPhoto(ctx.chat.id, t.image_url, { caption: msg, parse_mode: 'Markdown', reply_markup: markup }); return; }
+      catch(e) {}
+    }
+    await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: markup });
+  }
+
+  // ═══ صفحه جزئیات آیتم (قبل از خرید) ═══
+  async function showItemDetail(ctx, id) {
+    const item = await getItemById(id);
+    if (!item) return ctx.answerCbQuery('❌ پیدا نشد', { show_alert: true });
+    const uid = ctx.from.id;
+
+    let msg = `${item.name}\n\n`;
+    if (item.type === 'generator') msg += `⚙️ تولید: ${item.effect_value} سکه در دقیقه\n🔒 فقط یکی قابل خریده\n\n`;
+    else if (item.type === 'resource') msg += `📦 مقدار: ${item.effect_value} واحد\n\n`;
+    if (item.description) msg += `📖 ${item.description}\n\n`;
+    msg += `💵 قیمت: 💰 ${formatGold(item.price_gold)}`;
+
+    const buttons = [
+      [{ text: '✅ خرید', callback_data: `confirm_item|${item.id}|${uid}` }],
+      [{ text: '🔙 بازگشت', callback_data: cb('shop', uid) }]
+    ];
+    const markup = { inline_keyboard: buttons };
+
+    if (item.image_url) {
+      try { await ctx.telegram.sendPhoto(ctx.chat.id, item.image_url, { caption: msg, parse_mode: 'Markdown', reply_markup: markup }); return; }
+      catch(e) {}
+    }
+    await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: markup });
+  }
+
   async function renderHero(ctx, heroId) {
     const db = getSupabase();
     const { data: hero } = await db.from('player_characters').select(HERO_SEL).eq('id', heroId).single();
@@ -193,7 +253,6 @@ module.exports = function registerShop(bot) {
     await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
   }
 
-  // ═══ لیست قهرمان‌ها با ایموجی اختصاصی ═══
   async function showMyHeroes(ctx) {
     await processHeroRest(ctx.from.id);
     const db = getSupabase();
