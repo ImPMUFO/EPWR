@@ -28,7 +28,7 @@ async function getBot() {
   botInstance.use(async (ctx, next) => {
     const uid = ctx.from && ctx.from.id;
     if (uid) {
-      try { await processKitchenProduction(uid); } catch(e) {}
+      try { await processKitchenProduction(uid); } catch(e) { console.error('prod middleware err:', e.message); }
     }
     return next();
   });
