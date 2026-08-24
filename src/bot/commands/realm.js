@@ -42,8 +42,8 @@ async function showRealm(ctx) {
 
   const markup = {
     inline_keyboard: [
-      [{ text: '💰 جمع‌آوری', callback_data: cb('resources', ctx.from.id) }, { text: '🏗️ ساختمان‌ها', callback_data: cb('buildings', ctx.from.id) }],
-      [{ text: '👥 قهرمانان', callback_data: cb('myheroes', ctx.from.id) }, { text: '🔙', callback_data: cb('mainmenu', ctx.from.id) }]
+      [{ text: '🏗️ ساختمان‌ها', callback_data: cb('buildings', ctx.from.id) }, { text: '👥 قهرمانان', callback_data: cb('myheroes', ctx.from.id) }],
+      [{ text: '🔙 بازگشت', callback_data: cb('mainmenu', ctx.from.id) }]
     ]
   };
 
@@ -60,18 +60,6 @@ async function showRealm(ctx) {
 module.exports = function registerRealm(bot) {
   bot.command('realm', async (ctx) => { await showRealm(ctx); });
   bot.action(/^realm\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showRealm(ctx); });
-
-  bot.action(/^resources\|(\d+)$/, async (ctx) => {
-    await ctx.answerCbQuery();
-    const r = await processKitchenProduction(ctx.from.id);
-    const parts = [];
-    if (r.gold) parts.push(`💰+${r.gold}`);
-    if (r.eggs) parts.push(`🥚+${r.eggs}`);
-    if (r.food) parts.push(`🍖+${r.food}`);
-    if (r.wheat) parts.push(`🌾+${r.wheat}`);
-    await ctx.answerCbQuery(parts.length ? `✅ جمع شد: ${parts.join(' ')}` : '⏳ هنوز چیزی نرسیده! هر دقیقه خودکار آپدیت میشه.', { show_alert: true });
-    await showRealm(ctx);
-  });
 };
 
 module.exports.showRealm = showRealm;
