@@ -12,13 +12,14 @@ module.exports = function registerAdmin(bot) {
   bot.command('admin', async (ctx) => { if (!(await isAdmin(ctx.from.id))) return ctx.reply('⛔ شما دسترسی ندارید!'); clearState(ctx.from.id); await showAdminPanel(ctx); });
   bot.action(/^admin\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; clearState(ctx.from.id); await showAdminPanel(ctx); });
 
+  // ═══ مدیریت قهرمان‌ها ═══
   bot.action(/^admin_heroes\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; await showHeroesList(ctx); });
   bot.action(/^ah_edit_(\d+)\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; await showHeroEdit(ctx, parseInt(ctx.match[1])); });
   bot.action(/^ah_create\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; getState(ctx.from.id).step = 'create_name'; getState(ctx.from.id).data = {}; await ctx.reply('⚜️ نام قهرمان رو تایپ کن:', { reply_markup: { inline_keyboard: [[{ text: 'لغو', callback_data: cb('admin_heroes', ctx.from.id) }]] } }); });
 
   bot.action(/^ah_f_(\w+)_(\d+)\|(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return;
-    const names = { name:'نام', base_health:'سلامتی', base_attack:'حمله', base_defense:'دفاع', price_gold:'قیمت سکه', price_gems:'قیمت الماس', troop_power:'قدرت سرباز', troops_per_level:'ظرفیت سرباز در لول', required_barracks:'پادگان لازم' };
+    const names = { name:'نام', emoji:'ایموجی', base_health:'سلامتی', base_attack:'حمله', base_defense:'دفاع', price_gold:'قیمت سکه', price_gems:'قیمت الماس', troop_power:'قدرت سرباز', troops_per_level:'ظرفیت سرباز در لول', required_barracks:'پادگان لازم' };
     getState(ctx.from.id).step = 'edit_field'; getState(ctx.from.id).data = { field: ctx.match[1], idx: parseInt(ctx.match[2]) };
     await ctx.reply(`✏️ ${names[ctx.match[1]] || ctx.match[1]} جدید رو تایپ کن:`);
   });
@@ -38,6 +39,7 @@ module.exports = function registerAdmin(bot) {
   bot.action(/^ah_del_(\d+)\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; const i = ctx.match[1], uid = ctx.from.id; await ctx.reply('⚠️ برای همیشه حذف میشه. مطمئنی؟', { reply_markup: { inline_keyboard: [[{ text:'بله، حذف کن', callback_data:`ah_delconfirm_${i}|${uid}` }],[{ text:'خیر', callback_data:`ah_edit_${i}|${uid}` }]] } }); });
   bot.action(/^ah_delconfirm_(\d+)\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; const chars = await getChars(); const h = chars[parseInt(ctx.match[1])]; const db = getSupabase(); await db.from('player_characters').delete().eq('template_id', h.id); await db.from('character_templates').delete().eq('id', h.id); await ctx.answerCbQuery('حذف شد', { show_alert: true }); await showHeroesList(ctx); });
 
+  // ═══ بقیه بخش‌ها ═══
   bot.action(/^admin_create_gift\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; getState(ctx.from.id).step='gift_code'; getState(ctx.from.id).data={}; await ctx.reply('🎁 کد هدیه رو تایپ کن:', { reply_markup: { inline_keyboard: [[{ text:'لغو', callback_data: cb('admin', ctx.from.id) }]] } }); });
   bot.action(/^admin_add_resources\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; getState(ctx.from.id).step='resource_user_id'; getState(ctx.from.id).data={}; await ctx.reply('💰 آیدی عددی کاربر:', { reply_markup: { inline_keyboard: [[{ text:'لغو', callback_data: cb('admin', ctx.from.id) }]] } }); });
   bot.action(/^admin_broadcast\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; getState(ctx.from.id).step='broadcast'; getState(ctx.from.id).data={}; await ctx.reply('📢 پیامت رو تایپ کن:', { reply_markup: { inline_keyboard: [[{ text:'لغو', callback_data: cb('admin', ctx.from.id) }]] } }); });
@@ -53,6 +55,7 @@ module.exports = function registerAdmin(bot) {
   bot.action(/^admin_confirm_broadcast\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; const s=getState(ctx.from.id); if(s.step!=='broadcast_confirm')return; const db=getSupabase(); clearState(ctx.from.id); const {data:pl}=await db.from('players').select('telegram_id'); let su=0,fu=0; for(const p of pl||[]){try{await ctx.telegram.sendMessage(p.telegram_id,s.data.message);su++;}catch(e){fu++;}} const {data:gr}=await db.from('bot_groups').select('group_id'); let sg=0,fg=0; for(const g of gr||[]){try{await ctx.telegram.sendMessage(g.group_id,s.data.message);sg++;}catch(e){fg++;}} await ctx.reply(`📢 کاربران:${su}/${fu} گروه‌ها:${sg}/${fg}`); await showAdminPanel(ctx); });
   bot.action(/^admin_confirm_gift_all\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); if (!(await isAdmin(ctx.from.id))) return; const s=getState(ctx.from.id); if(s.step!=='gift_all_confirm')return; const db=getSupabase(); const {data:pl}=await db.from('players').select('telegram_id,gold'); clearState(ctx.from.id); let c=0; for(const p of pl||[]){await db.from('players').update({gold:p.gold+s.data.gold}).eq('telegram_id',p.telegram_id);c++;} await ctx.reply(`🎁 ${formatGold(s.data.gold)} به ${c} کاربر`); await showAdminPanel(ctx); });
 
+  // ═══ دریافت عکس ═══
   bot.on('photo', async (ctx, next) => {
     if (!(await isAdmin(ctx.from.id))) return next();
     const s = getState(ctx.from.id);
@@ -64,6 +67,7 @@ module.exports = function registerAdmin(bot) {
     clearState(ctx.from.id);
   });
 
+  // ═══ دریافت متن ═══
   bot.on('text', async (ctx, next) => {
     if (!(await isAdmin(ctx.from.id))) return next();
     const s = getState(ctx.from.id);
@@ -81,7 +85,8 @@ module.exports = function registerAdmin(bot) {
     }
     if (s.step==='edit_field') {
       const { field, idx } = s.data;
-      const value = field==='name' ? text : (parseInt(text)||0);
+      const textFields = ['name', 'emoji'];
+      const value = textFields.includes(field) ? text : (parseInt(text) || 0);
       const chars = await getChars(); const h = chars[idx];
       await setHeroFieldRaw(ctx, h.id, { [field]: value });
       clearState(ctx.from.id); return;
@@ -120,20 +125,21 @@ module.exports = function registerAdmin(bot) {
   async function showHeroEdit(ctx, idx) {
     const chars = await getChars(); const h = chars[idx]; if(!h) return; const uid = ctx.from.id;
     let msg = `✏️ *${h.name}*\n\n`;
-    msg += `سلامتی:${h.base_health} حمله:${h.base_attack} دفاع:${h.base_defense}\n`;
+    msg += `ایموجی:${h.emoji || '⚔️'} | سلامتی:${h.base_health} حمله:${h.base_attack} دفاع:${h.base_defense}\n`;
     msg += `قیمت:💰${h.price_gold} 💎${h.price_gems} | کمیابی:${h.rarity}\n`;
     msg += `نوع:${h.type} | سرباز:${h.troop_type} قدرت:${h.troop_power} ظرفیت/لول:${h.troops_per_level}\n`;
     msg += `🏰 پادگان لازم: Lv.${h.required_barracks || 1}\n`;
     msg += `وضعیت:${h.hidden?'مخفی':'نمایش'} ${h.image_url?'| 🖼 دارد':''}`;
     await ctx.reply(msg,{parse_mode:'Markdown',reply_markup:{inline_keyboard:[
-      [{text:'نام',callback_data:`ah_f_name_${idx}|${uid}`},{text:'سلامتی',callback_data:`ah_f_base_health_${idx}|${uid}`}],
-      [{text:'حمله',callback_data:`ah_f_base_attack_${idx}|${uid}`},{text:'دفاع',callback_data:`ah_f_base_defense_${idx}|${uid}`}],
-      [{text:'قیمت سکه',callback_data:`ah_f_price_gold_${idx}|${uid}`},{text:'قیمت الماس',callback_data:`ah_f_price_gems_${idx}|${uid}`}],
-      [{text:'کمیابی',callback_data:`ah_rarity_${idx}|${uid}`},{text:'نوع قهرمان',callback_data:`ah_type_${idx}|${uid}`}],
-      [{text:'نوع سرباز',callback_data:`ah_troop_${idx}|${uid}`},{text:'قدرت سرباز',callback_data:`ah_f_troop_power_${idx}|${uid}`}],
-      [{text:'ظرفیت سرباز',callback_data:`ah_f_troops_per_level_${idx}|${uid}`},{text:'پادگان لازم',callback_data:`ah_f_required_barracks_${idx}|${uid}`}],
-      [{text:'تصویر',callback_data:`ah_img_${idx}|${uid}`},{text:h.hidden?'نمایش در فروشگاه':'مخفی کن',callback_data:`ah_hide_${idx}|${uid}`}],
-      [{text:'حذف',callback_data:`ah_del_${idx}|${uid}`},{text:'بازگشت به لیست',callback_data:cb('admin_heroes',uid)}]
+      [{text:'نام',callback_data:`ah_f_name_${idx}|${uid}`},{text:'ایموجی',callback_data:`ah_f_emoji_${idx}|${uid}`}],
+      [{text:'سلامتی',callback_data:`ah_f_base_health_${idx}|${uid}`},{text:'حمله',callback_data:`ah_f_base_attack_${idx}|${uid}`}],
+      [{text:'دفاع',callback_data:`ah_f_base_defense_${idx}|${uid}`},{text:'قیمت سکه',callback_data:`ah_f_price_gold_${idx}|${uid}`}],
+      [{text:'قیمت الماس',callback_data:`ah_f_price_gems_${idx}|${uid}`},{text:'کمیابی',callback_data:`ah_rarity_${idx}|${uid}`}],
+      [{text:'نوع قهرمان',callback_data:`ah_type_${idx}|${uid}`},{text:'نوع سرباز',callback_data:`ah_troop_${idx}|${uid}`}],
+      [{text:'قدرت سرباز',callback_data:`ah_f_troop_power_${idx}|${uid}`},{text:'ظرفیت سرباز',callback_data:`ah_f_troops_per_level_${idx}|${uid}`}],
+      [{text:'پادگان لازم',callback_data:`ah_f_required_barracks_${idx}|${uid}`},{text:'تصویر',callback_data:`ah_img_${idx}|${uid}`}],
+      [{text:h.hidden?'نمایش در فروشگاه':'مخفی کن',callback_data:`ah_hide_${idx}|${uid}`},{text:'حذف',callback_data:`ah_del_${idx}|${uid}`}],
+      [{text:'بازگشت به لیست',callback_data:cb('admin_heroes',uid)}]
     ]}});
   }
 
