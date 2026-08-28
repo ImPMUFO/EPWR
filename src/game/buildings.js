@@ -12,17 +12,8 @@ const BUILDINGS = {
   chicken: { name: '🐔 مرغداری', desc: '1 تخم مرغ هر 10 دقیقه هر سطح', base_cost: { wood: 100, gold: 150 }, bonus: { eggs_per_day: 5 }, max_level: 5 }
 };
 
-async function getBuildings(telegramId) {
-  const db = getSupabase();
-  const { data } = await db.from('buildings').select('*').eq('telegram_id', telegramId);
-  return data || [];
-}
-
-async function getBuilding(telegramId, type) {
-  const db = getSupabase();
-  const { data } = await db.from('buildings').select('*').eq('telegram_id', telegramId).eq('type', type).maybeSingle();
-  return data;
-}
+async function getBuildings(telegramId) { const db = getSupabase(); const { data } = await db.from('buildings').select('*').eq('telegram_id', telegramId); return data || []; }
+async function getBuilding(telegramId, type) { const db = getSupabase(); const { data } = await db.from('buildings').select('*').eq('telegram_id', telegramId).eq('type', type).maybeSingle(); return data; }
 
 async function buildBuilding(telegramId, type) {
   const db = getSupabase();
@@ -59,21 +50,10 @@ async function upgradeBuilding(telegramId, type) {
   return { success: true, newLevel: existing.level + 1 };
 }
 
-async function getDefenseBonus(telegramId) {
-  const buildings = await getBuildings(telegramId);
-  let b = 0;
-  for (const x of buildings) { const d = BUILDINGS[x.type]; if (d && d.bonus.defense) b += d.bonus.defense * x.level; }
-  return b;
-}
+async function getDefenseBonus(telegramId) { const b = await getBuildings(telegramId); let s = 0; for (const x of b) { const d = BUILDINGS[x.type]; if (d && d.bonus.defense) s += d.bonus.defense * x.level; } return s; }
+async function getAttackBonus(telegramId) { const b = await getBuildings(telegramId); let s = 0; for (const x of b) { const d = BUILDINGS[x.type]; if (d && d.bonus.attack) s += d.bonus.attack * x.level; } return s; }
 
-async function getAttackBonus(telegramId) {
-  const buildings = await getBuildings(telegramId);
-  let b = 0;
-  for (const x of buildings) { const d = BUILDINGS[x.type]; if (d && d.bonus.attack) b += d.bonus.attack * x.level; }
-  return b;
-}
-
-// ═══ تولید خودکار دقیقه‌ای (با رفع باگ مقداردهی اولیه) ═══
+// ═══ تولید خودکار دقیقه‌ای ═══
 async function processKitchenProduction(telegramId) {
   const db = getSupabase();
   const now = Date.now();
@@ -81,7 +61,6 @@ async function processKitchenProduction(telegramId) {
   const { data: player } = await db.from('players').select('*').eq('telegram_id', telegramId).single();
   if (!player) return zeros;
 
-  // ═══ اولین اجرا: فقط زمان شروع رو ثبت کن ═══
   if (!player.last_prod_tick) {
     await db.from('players').update({ last_prod_tick: new Date(now).toISOString() }).eq('telegram_id', telegramId);
     return zeros;
@@ -96,41 +75,42 @@ async function processKitchenProduction(telegramId) {
   const updates = {};
   const out = { gold: 0, eggs: 0, food: 0, wheat: 0 };
 
-  // ⚙️ دستگاه سکه‌ساز (1 سکه در دقیقه)
+  // ⚙️ دستگاه سکه‌ساز: 600 سکه در روز (کسری با progress)
   const { data: items } = await db.from('player_items').select('id, item:shop_items (type, effect_value)').eq('telegram_id', telegramId).eq('is_active', true);
   const gen = (items || []).find(i => i.item && i.item.type === 'generator');
   if (gen) {
-    out.gold = min * (gen.item.effect_value || 1);
-    updates.gold = (player.gold || 0) + out.gold;
+    const ratePerMin = (gen.item.effect_value || 600) / 1440;
+    const prog = (player.gold_progress || 0) + min * ratePerMin;
+    const add = Math.floor(prog);
+    out.gold = add;
+    updates.gold_progress = prog - add;
+    if (add > 0) updates.gold = (player.gold || 0) + add;
   }
 
-  // 🍳 آشپزخانه: 1 غذا هر 20 دقیقه هر سطح
+  // 🍳 آشپزخانه
   const kitchen = await getBuilding(telegramId, 'kitchen');
   if (kitchen) {
     const prog = (player.food_progress || 0) + min * 0.05 * kitchen.level;
     const add = Math.floor(prog);
-    out.food = add;
-    updates.food_progress = prog - add;
+    out.food = add; updates.food_progress = prog - add;
     if (add > 0) updates.food = Math.min((player.food || 0) + add, player.food_capacity || 1000);
   }
 
-  // 🐔 مرغداری: 1 تخم مرغ هر 10 دقیقه هر سطح
+  // 🐔 مرغداری
   const chicken = await getBuilding(telegramId, 'chicken');
   if (chicken) {
     const prog = (player.egg_progress || 0) + min * 0.1 * chicken.level;
     const add = Math.floor(prog);
-    out.eggs = add;
-    updates.egg_progress = prog - add;
+    out.eggs = add; updates.egg_progress = prog - add;
     if (add > 0) updates.eggs = (player.eggs || 0) + add;
   }
 
-  // 🌾 مزرعه: 1 گندم هر 30 دقیقه هر سطح
+  // 🌾 مزرعه
   const farm = await getBuilding(telegramId, 'farm');
   if (farm) {
     const prog = (player.wheat_progress || 0) + min * (1 / 30) * farm.level;
     const add = Math.floor(prog);
-    out.wheat = add;
-    updates.wheat_progress = prog - add;
+    out.wheat = add; updates.wheat_progress = prog - add;
     if (add > 0) updates.wheat = (player.wheat || 0) + add;
   }
 
@@ -139,32 +119,10 @@ async function processKitchenProduction(telegramId) {
   return out;
 }
 
-async function craftFlour(telegramId) {
-  const db = getSupabase();
-  const { data: p } = await db.from('players').select('*').eq('telegram_id', telegramId).single();
-  if ((p.wheat || 0) < 10) return { success: false, message: '❌ به 10 گندم نیاز داری!' };
-  await db.from('players').update({ wheat: p.wheat - 10, flour: (p.flour || 0) + 5 }).eq('telegram_id', telegramId);
-  return { success: true };
-}
+async function craftFlour(telegramId) { const db = getSupabase(); const { data: p } = await db.from('players').select('*').eq('telegram_id', telegramId).single(); if ((p.wheat || 0) < 10) return { success: false, message: '❌ به 10 گندم نیاز داری!' }; await db.from('players').update({ wheat: p.wheat - 10, flour: (p.flour || 0) + 5 }).eq('telegram_id', telegramId); return { success: true }; }
+async function craftBread(telegramId) { const db = getSupabase(); const { data: p } = await db.from('players').select('*').eq('telegram_id', telegramId).single(); if ((p.flour || 0) < 5) return { success: false, message: '❌ به 5 آرد نیاز داری!' }; await db.from('players').update({ flour: p.flour - 5, bread: (p.bread || 0) + 5 }).eq('telegram_id', telegramId); return { success: true }; }
+async function eatBread(telegramId) { const db = getSupabase(); const { data: p } = await db.from('players').select('*').eq('telegram_id', telegramId).single(); if ((p.bread || 0) < 1) return { success: false, message: '❌ نان نداری!' }; await db.from('players').update({ bread: p.bread - 1, food: Math.min((p.food || 0) + 100, p.food_capacity || 1000) }).eq('telegram_id', telegramId); return { success: true }; }
 
-async function craftBread(telegramId) {
-  const db = getSupabase();
-  const { data: p } = await db.from('players').select('*').eq('telegram_id', telegramId).single();
-  if ((p.flour || 0) < 5) return { success: false, message: '❌ به 5 آرد نیاز داری!' };
-  await db.from('players').update({ flour: p.flour - 5, bread: (p.bread || 0) + 5 }).eq('telegram_id', telegramId);
-  return { success: true };
-}
-
-async function eatBread(telegramId) {
-  const db = getSupabase();
-  const { data: p } = await db.from('players').select('*').eq('telegram_id', telegramId).single();
-  if ((p.bread || 0) < 1) return { success: false, message: '❌ نان نداری!' };
-  await db.from('players').update({ bread: p.bread - 1, food: Math.min((p.food || 0) + 100, p.food_capacity || 1000) }).eq('telegram_id', telegramId);
-  return { success: true };
-}
-
-function getResName(r) {
-  return { gold: '💰 سکه', wood: '🪵 چوب', stone: '🪨 سنگ', iron: '⚙️ آهن', food: '🍖 غذا' }[r] || r;
-}
+function getResName(r) { return { gold: '💰 سکه', wood: '🪵 چوب', stone: '🪨 سنگ', iron: '⚙️ آهن', food: '🍖 غذا' }[r] || r; }
 
 module.exports = { BUILDINGS, getBuildings, getBuilding, buildBuilding, upgradeBuilding, getDefenseBonus, getAttackBonus, processKitchenProduction, craftFlour, craftBread, eatBread, getResName };
