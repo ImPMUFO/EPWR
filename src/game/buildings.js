@@ -9,7 +9,7 @@ const BUILDINGS = {
   forge: { name: '⚒️ آهنگری', desc: 'قدرت قهرمانان +15 هر سطح', base_cost: { iron: 200, gold: 500 }, bonus: { attack: 15 }, max_level: 5 },
   barracks: { name: '⚔️ پادگان', desc: 'استراحت قهرمان‌ها | هر سطح قهرمان‌های قوی‌تر', base_cost: { wood: 250, stone: 150, gold: 300 }, bonus: { hero_capacity: 2 }, max_level: 5 },
   kitchen: { name: '🍳 آشپزخانه', desc: '1 غذا هر 20 دقیقه هر سطح', base_cost: { wood: 150, gold: 250 }, bonus: { food_per_day: 20 }, max_level: 5 },
-  chicken: { name: '🐔 مرغداری', desc: '1 تخم مرغ هر 10 دقیقه هر سطح', base_cost: { wood: 100, gold: 150 }, bonus: { eggs_per_day: 5 }, max_level: 5 }
+  chicken: { name: '🐔 مرغداری', desc: '1 تخم مرغ هر ساعت هر سطح', base_cost: { wood: 100, gold: 150 }, bonus: { eggs_per_day: 5 }, max_level: 5 }
 };
 
 async function getBuildings(telegramId) { const db = getSupabase(); const { data } = await db.from('buildings').select('*').eq('telegram_id', telegramId); return data || []; }
@@ -75,19 +75,18 @@ async function processKitchenProduction(telegramId) {
   const updates = {};
   const out = { gold: 0, eggs: 0, food: 0, wheat: 0 };
 
-  // ⚙️ دستگاه سکه‌ساز: 600 سکه در روز (کسری با progress)
+  // ⚙️ دستگاه سکه‌ساز: 600 سکه در روز
   const { data: items } = await db.from('player_items').select('id, item:shop_items (type, effect_value)').eq('telegram_id', telegramId).eq('is_active', true);
   const gen = (items || []).find(i => i.item && i.item.type === 'generator');
   if (gen) {
     const ratePerMin = (gen.item.effect_value || 600) / 1440;
     const prog = (player.gold_progress || 0) + min * ratePerMin;
     const add = Math.floor(prog);
-    out.gold = add;
-    updates.gold_progress = prog - add;
+    out.gold = add; updates.gold_progress = prog - add;
     if (add > 0) updates.gold = (player.gold || 0) + add;
   }
 
-  // 🍳 آشپزخانه
+  // 🍳 آشپزخانه: 1 غذا هر 20 دقیقه هر سطح
   const kitchen = await getBuilding(telegramId, 'kitchen');
   if (kitchen) {
     const prog = (player.food_progress || 0) + min * 0.05 * kitchen.level;
@@ -96,16 +95,16 @@ async function processKitchenProduction(telegramId) {
     if (add > 0) updates.food = Math.min((player.food || 0) + add, player.food_capacity || 1000);
   }
 
-  // 🐔 مرغداری
+  // 🐔 مرغداری: 1 تخم مرغ هر ساعت هر سطح (کاهش یافت)
   const chicken = await getBuilding(telegramId, 'chicken');
   if (chicken) {
-    const prog = (player.egg_progress || 0) + min * 0.1 * chicken.level;
+    const prog = (player.egg_progress || 0) + min * (1 / 60) * chicken.level;
     const add = Math.floor(prog);
     out.eggs = add; updates.egg_progress = prog - add;
     if (add > 0) updates.eggs = (player.eggs || 0) + add;
   }
 
-  // 🌾 مزرعه
+  // 🌾 مزرعه: 1 گندم هر 30 دقیقه هر سطح
   const farm = await getBuilding(telegramId, 'farm');
   if (farm) {
     const prog = (player.wheat_progress || 0) + min * (1 / 30) * farm.level;
