@@ -13,22 +13,18 @@ async function getRealmBg() {
   return data?.file_id || null;
 }
 
-async function getNextTickInfo(telegramId) {
+async function getGenInfo(telegramId) {
   const db = getSupabase();
-  const { data: player } = await db.from('players').select('last_prod_tick').eq('telegram_id', telegramId).single();
-  if (!player || !player.last_prod_tick) return null;
-  const last = new Date(player.last_prod_tick).getTime();
-  const next = last + 60000;
-  const seconds = Math.max(0, Math.ceil((next - Date.now()) / 1000));
-  return seconds;
-}
-
-async function hasGenerator(telegramId) {
-  const db = getSupabase();
-  const { data: items } = await db.from('player_items')
-    .select('id, item:shop_items (type)')
-    .eq('telegram_id', telegramId).eq('is_active', true);
-  return (items || []).some(i => i.item && i.item.type === 'generator');
+  const { data: player } = await db.from('players').select('gold_progress').eq('telegram_id', telegramId).single();
+  const { data: items } = await db.from('player_items').select('id, item:shop_items (type, effect_value)').eq('telegram_id', telegramId).eq('is_active', true);
+  const gen = (items || []).find(i => i.item && i.item.type === 'generator');
+  if (!gen) return null;
+  const perDay = gen.item.effect_value || 600;
+  const ratePerMin = perDay / 1440;
+  const prog = player?.gold_progress || 0;
+  const remaining = 1 - prog;
+  const seconds = Math.max(1, Math.ceil((remaining / ratePerMin) * 60));
+  return { perDay, seconds };
 }
 
 async function showRealm(ctx) {
@@ -38,15 +34,10 @@ async function showRealm(ctx) {
   const heroes = await getPlayerHeroes(ctx.from.id);
   const alliance = await getPlayerAlliance(ctx.from.id);
   const defBonus = await getDefenseBonus(ctx.from.id);
-  const hasGen = await hasGenerator(ctx.from.id);
-  const secondsLeft = await getNextTickInfo(ctx.from.id);
+  const genInfo = await getGenInfo(ctx.from.id);
 
   let atk = 0, def = 0;
-  for (const h of heroes) {
-    const st = heroStats(h);
-    atk += st.attack + heroTroopsPower(h);
-    def += st.defense;
-  }
+  for (const h of heroes) { const st = heroStats(h); atk += st.attack + heroTroopsPower(h); def += st.defense; }
   def += defBonus;
 
   let msg = `🏰 *${player.realm_name || 'قلمرو'}*\n`;
@@ -60,7 +51,6 @@ async function showRealm(ctx) {
   msg += `🛡 قدرت دفاع: ${def}\n`;
   msg += `🦸 قهرمان‌ها: ${heroes.length} | 🤝 ${alliance ? alliance.alliance.name : '—'}\n\n`;
 
-  // ═══ نمایش وضعیت تولید ═══
   if (produced.gold > 0 || produced.eggs > 0 || produced.food > 0 || produced.wheat > 0) {
     const parts = [];
     if (produced.gold) parts.push(`💰+${produced.gold}`);
@@ -70,11 +60,9 @@ async function showRealm(ctx) {
     msg += `🎁 *این بازدید: ${parts.join(' ')}*\n`;
   }
 
-  if (hasGen) {
-    msg += `⚙️ دستگاه سکه‌ساز: فعال\n`;
-    if (secondsLeft !== null) {
-      msg += `⏰ +1 💰 در ${secondsLeft} ثانیه`;
-    }
+  if (genInfo) {
+    msg += `⚙️ دستگاه سکه‌ساز: +${genInfo.perDay} 💰/روز\n`;
+    msg += `⏰ +1 💰 در ${genInfo.seconds} ثانیه`;
   } else {
     msg += `💡 _دستگاه سکه‌ساز از فروشگاه بخر_`;
   }
@@ -89,10 +77,7 @@ async function showRealm(ctx) {
 
   const bg = await getRealmBg();
   if (bg) {
-    try {
-      await ctx.telegram.sendPhoto(ctx.chat.id, bg, { caption: msg, parse_mode: 'Markdown', reply_markup: markup });
-      return;
-    } catch(e) {}
+    try { await ctx.telegram.sendPhoto(ctx.chat.id, bg, { caption: msg, parse_mode: 'Markdown', reply_markup: markup }); return; } catch(e) {}
   }
   await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: markup });
 }
