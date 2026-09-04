@@ -2,17 +2,18 @@ const { getSession, clearSession, getAttackHeroes, getBotRealms, getDefeatedNPCs
 const { smartReply, cb } = require('../../core/helpers');
 
 module.exports = function registerBattle(bot) {
-  bot.command('battle', async (ctx) => { await showBattleMenu(ctx); });
-  bot.action(/^battle\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await showBattleMenu(ctx); });
+  bot.command('battle', async (ctx) => { await smartReply(ctx, buildMenuText(), { parse_mode: 'Markdown', reply_markup: buildMenuMarkup(ctx.from.id) }); });
+  bot.action(/^battle\|(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await smartReply(ctx, buildMenuText(), { parse_mode: 'Markdown', reply_markup: buildMenuMarkup(ctx.from.id) }); });
 
-  async function showBattleMenu(ctx) {
-    const uid = ctx.from.id;
-    let msg = `⚔️ *میدان نبرد*\n\n🎯 نوع نبرد رو انتخاب کن:\n\n🤖 *NPC:* سرزمین‌های ربات رو فتح کن\n👥 *PvP:* با بازیکن‌های واقعی بجنگ\n\n💡 هر نبرد XP و سکه میده!`;
-    await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [
+  function buildMenuText() {
+    return `⚔️ *میدان نبرد*\n\n🎯 نوع نبرد رو انتخاب کن:\n\n🤖 *NPC:* سرزمین‌های ربات رو فتح کن\n👥 *PvP:* با بازیکن‌های واقعی بجنگ\n\n💡 هر نبرد XP و سکه میده!`;
+  }
+  function buildMenuMarkup(uid) {
+    return { inline_keyboard: [
       [{ text: '🤖 جنگ با NPC', callback_data: cb('battle_npc_list', uid) }],
       [{ text: '👥 جنگ با بازیکن (PvP)', callback_data: cb('battle_pvp', uid) }],
       [{ text: '🔙 بازگشت', callback_data: cb('mainmenu', uid) }]
-    ] } });
+    ] };
   }
 
   bot.action(/^battle_npc_list\|(\d+)$/, async (ctx) => {
@@ -28,8 +29,7 @@ module.exports = function registerBattle(bot) {
       buttons.push([{ text: '👥 جنگ PvP', callback_data: cb('battle_pvp', uid) }]);
     } else {
       available.forEach(b => {
-        const stars = '⭐'.repeat(b.difficulty);
-        msg += `${b.emoji} *${b.name}* ${stars}\n   💰 ${b.gold_reward_min}-${b.gold_reward_max}\n\n`;
+        msg += `${b.emoji} *${b.name}* ${'⭐'.repeat(b.difficulty)}\n   💰 ${b.gold_reward_min}-${b.gold_reward_max}\n\n`;
         buttons.push([{ text: `${b.emoji} ${b.name}`, callback_data: `battle_npc|${b.id}|${uid}` }]);
       });
     }
@@ -78,7 +78,7 @@ module.exports = function registerBattle(bot) {
 
   async function showHeroSelection(ctx) {
     const heroes = await getAttackHeroes(ctx.from.id);
-    if (heroes.length === 0) return ctx.answerCbQuery('❌ قهرمان حمله‌ای نداری! (شاید همه دفاعی یا در استراحتن)', { show_alert: true });
+    if (heroes.length === 0) return ctx.answerCbQuery('❌ قهرمان حمله‌ای نداری!', { show_alert: true });
     const session = getSession(ctx.from.id);
     const uid = ctx.from.id;
     let msg = `🎯 *انتخاب قهرمان*\n\n`;
