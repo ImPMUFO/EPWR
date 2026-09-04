@@ -1,53 +1,75 @@
-function rarityEmoji(rarity) {
-  return { common: '⚪', rare: '🔵', epic: '🟣', legendary: '🟡' }[rarity] || '⚪';
+const { getSupabase } = require('./supabase');
+
+// ═══ هوشمندترین smartReply ═══
+// اگه callbackQuery باشه → حتماً همون پیام قبلی رو edit کنه
+// اگه پیام عادی باشه → reply کنه
+async function smartReply(ctx, text, extra = {}) {
+  try {
+    // حالت ۱: دکمه فشرده شده (callbackQuery) → editMessageText
+    if (ctx.callbackQuery) {
+      try {
+        return await ctx.editMessageText(text, extra);
+      } catch (e1) {
+        // اگه editMessageText شکست خورد (مثلاً عکس بوده)، editMessageMedia رو امتحان کن
+        if (extra.reply_markup) {
+          try {
+            return await ctx.editMessageCaption(text, extra);
+          } catch (e2) {
+            // اگه اون هم نشد، پیام جدید بفرست (آخرین راه)
+            return await ctx.reply(text, extra);
+          }
+        }
+        return await ctx.reply(text, extra);
+      }
+    }
+    
+    // حالت ۲: پیام عادی (/command یا message)
+    // اگه updateType=message هست، reply کن
+    if (ctx.message || ctx.updateType === 'message') {
+      return await ctx.reply(text, extra);
+    }
+    
+    // حالت ۳: هر حالت دیگه‌ای → reply
+    return await ctx.reply(text, extra);
+  } catch (err) {
+    console.error('smartReply error:', err.message);
+    try {
+      return await ctx.reply(text, extra);
+    } catch (e) {}
+  }
 }
 
-function rarityName(rarity) {
-  return { common: 'معمولی', rare: 'کمیاب', epic: 'حماسی', legendary: 'افسانه‌ای' }[rarity] || 'معمولی';
+// ═══ reply ساده ═══
+async function reply(ctx, text, extra = {}) {
+  try { return await ctx.reply(text, extra); } catch (e) { console.error('reply error:', e.message); }
 }
 
-function formatGold(amount) {
-  return Number(amount).toLocaleString('en-US');
-}
-
+// ═══ ساخت callback_data با چک کاربر ═══
 function cb(action, userId) {
   return `${action}|${userId}`;
 }
 
+// ═══ چک می‌کنه کاربر همون کسی هست که منو براش ساخته ═══
 function isOwner(ctx) {
   if (!ctx.callbackQuery) return true;
-  const data = ctx.callbackQuery.data;
-  if (!data || !data.includes('|')) return true;
+  const data = ctx.callbackQuery.data || '';
   const parts = data.split('|');
   const ownerId = parseInt(parts[parts.length - 1]);
-  if (isNaN(ownerId)) return true;
-  return ctx.from.id === ownerId;
+  return ctx.from.id === ownerId || !ownerId;
 }
 
-function getReplyParams(ctx) {
-  if (ctx.message) return { message_id: ctx.message.message_id };
-  return undefined;
+// ═══ فرمت عدد با کاما ═══
+function formatGold(n) {
+  return (n || 0).toLocaleString('en-US');
 }
 
-async function reply(ctx, text, options = {}) {
-  const reply_parameters = getReplyParams(ctx);
-  return ctx.reply(text, { ...options, reply_parameters });
+// ═══ ایموجی کمیابی ═══
+function rarityEmoji(r) {
+  return { common: '⚪', rare: '🔵', epic: '🟣', legendary: '🟡' }[r] || '⚪';
 }
 
-// ═══ تابع هوشمند: ویرایش پیام به جای فرستادن پیام جدید ═══
-async function smartReply(ctx, text, options = {}) {
-  // اگه از دکمه اومده، پیام رو ویرایش کن
-  if (ctx.callbackQuery && ctx.callbackQuery.message) {
-    try {
-      return await ctx.editMessageText(text, options);
-    } catch(e) {
-      // اگه ویرایش نشد، پیام جدید بفرست
-      return await ctx.reply(text, options);
-    }
-  }
-  // اگه دستور بود، reply کن
-  const reply_parameters = getReplyParams(ctx);
-  return ctx.reply(text, { ...options, reply_parameters });
+function rarityName(r) {
+  return { common: 'معمولی', rare: 'کمیاب', epic: 'حماسی', legendary: 'افسانه‌ای' }[r] || 'معمولی';
 }
 
-module.exports = { rarityEmoji, rarityName, formatGold, cb, isOwner, reply, smartReply };
+module.exports = { smartReply, reply, cb, isOwner, formatGold, rarityEmoji, rarityName };
