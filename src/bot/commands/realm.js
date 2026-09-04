@@ -1,7 +1,7 @@
 const { getOrCreatePlayer } = require('../../game/player');
 const { getPlayerHeroes } = require('../../game/battle');
 const { heroStats, heroTroopsPower } = require('../../game/troops');
-const { getDefenseBonus, processKitchenProduction } = require('../../game/buildings');
+const { getDefenseBonus } = require('../../game/buildings');
 const { getPlayerAlliance } = require('../../game/alliance');
 const { processHeroRest } = require('../../game/rest');
 const { getSupabase } = require('../../core/supabase');
@@ -22,14 +22,12 @@ async function getGenInfo(telegramId) {
   const perDay = gen.item.effect_value || 600;
   const ratePerMin = perDay / 1440;
   const prog = player?.gold_progress || 0;
-  const remaining = 1 - prog;
-  const seconds = Math.max(1, Math.ceil((remaining / ratePerMin) * 60));
+  const seconds = Math.max(1, Math.ceil(((1 - prog) / ratePerMin) * 60));
   return { perDay, seconds };
 }
 
 async function showRealm(ctx) {
   await processHeroRest(ctx.from.id);
-  const produced = await processKitchenProduction(ctx.from.id);
   const player = await getOrCreatePlayer(ctx.from);
   const heroes = await getPlayerHeroes(ctx.from.id);
   const alliance = await getPlayerAlliance(ctx.from.id);
@@ -50,35 +48,15 @@ async function showRealm(ctx) {
   msg += `⚔️ قدرت حمله: ${atk}\n`;
   msg += `🛡 قدرت دفاع: ${def}\n`;
   msg += `🦸 قهرمان‌ها: ${heroes.length} | 🤝 ${alliance ? alliance.alliance.name : '—'}\n\n`;
+  if (genInfo) msg += `⚙️ دستگاه سکه‌ساز: +${genInfo.perDay} 💰/روز\n⏰ +1 💰 در ${genInfo.seconds} ثانیه`;
+  else msg += `💡 _دستگاه سکه‌ساز از فروشگاه بخر_`;
 
-  if (produced.gold > 0 || produced.eggs > 0 || produced.food > 0 || produced.wheat > 0) {
-    const parts = [];
-    if (produced.gold) parts.push(`💰+${produced.gold}`);
-    if (produced.eggs) parts.push(`🥚+${produced.eggs}`);
-    if (produced.food) parts.push(`🍖+${produced.food}`);
-    if (produced.wheat) parts.push(`🌾+${produced.wheat}`);
-    msg += `🎁 *این بازدید: ${parts.join(' ')}*\n`;
-  }
+  const markup = { inline_keyboard: [
+    [{ text: '🔄 به‌روزرسانی', callback_data: cb('realm', ctx.from.id) }],
+    [{ text: '🏗️ ساختمان‌ها', callback_data: cb('buildings', ctx.from.id) }, { text: '👥 قهرمانان', callback_data: cb('myheroes', ctx.from.id) }],
+    [{ text: '🔙 بازگشت', callback_data: cb('mainmenu', ctx.from.id) }]
+  ] };
 
-  if (genInfo) {
-    msg += `⚙️ دستگاه سکه‌ساز: +${genInfo.perDay} 💰/روز\n`;
-    msg += `⏰ +1 💰 در ${genInfo.seconds} ثانیه`;
-  } else {
-    msg += `💡 _دستگاه سکه‌ساز از فروشگاه بخر_`;
-  }
-
-  const markup = {
-    inline_keyboard: [
-      [{ text: '🔄 به‌روزرسانی', callback_data: cb('realm', ctx.from.id) }],
-      [{ text: '🏗️ ساختمان‌ها', callback_data: cb('buildings', ctx.from.id) }, { text: '👥 قهرمانان', callback_data: cb('myheroes', ctx.from.id) }],
-      [{ text: '🔙 بازگشت', callback_data: cb('mainmenu', ctx.from.id) }]
-    ]
-  };
-
-  const bg = await getRealmBg();
-  if (bg) {
-    try { await ctx.telegram.sendPhoto(ctx.chat.id, bg, { caption: msg, parse_mode: 'Markdown', reply_markup: markup }); return; } catch(e) {}
-  }
   await smartReply(ctx, msg, { parse_mode: 'Markdown', reply_markup: markup });
 }
 
